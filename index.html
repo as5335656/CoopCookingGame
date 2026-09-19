@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>雙人合作餐廳</title>
-<link rel="stylesheet" href="css/style.css?v=2.3" />
+<link rel="stylesheet" href="css/style.css?v=2.4" />
 </head>
 <body>
 
@@ -36,7 +36,7 @@
   </div>
 
   <p id="menu-error" class="error-text"></p>
-  <div id="version-label">V2.3</div>
+  <div id="version-label">V2.4</div>
 </div>
 
 <div id="screen-pairing" class="screen">
@@ -79,17 +79,19 @@
 
   <div id="edit-panel" class="hidden">
     <p id="edit-level-label" class="hint">正在編輯:1-1</p>
-    <p class="hint">拖拉場景裡的物件調整位置(不會互相重疊)。點下方按鈕可以新增物件。</p>
+    <p class="hint">拖拉物件調整位置。廚具要先放「桌子」當底座,再點下面的種類按鈕、然後點一個空桌子放上去。</p>
     <div id="edit-palette"></div>
-    <p class="hint">調整大小(先選種類,再用 －/＋ 調整那個種類的全部物件):</p>
+    <p id="edit-place-hint" class="hint hidden">請點一個空桌子,把選好的種類放上去(再點一次面板按鈕可以取消)</p>
+    <p class="hint">調整大小(點場景裡的物件來指定種類,再用 －/＋ 調整那個種類的全部物件):</p>
     <div class="panel">
-      <select id="size-type-filter" class="type-select"></select>
+      <span id="size-type-label" class="size-display">尚未選取</span>
     </div>
     <div class="panel">
       <button id="btn-size-minus" class="btn btn-secondary">－</button>
       <span id="size-display" class="size-display">64</span>
       <button id="btn-size-plus" class="btn btn-secondary">＋</button>
     </div>
+    <button id="btn-delete-mode" class="btn btn-secondary">刪除模式:關閉</button>
     <button id="btn-copy-layout" class="btn btn-primary">複製佈局</button>
     <button id="btn-reset-layout" class="btn btn-secondary">還原成預設佈局</button>
     <textarea id="edit-output" readonly></textarea>
@@ -99,15 +101,15 @@
 
 <script src="vendor/phaser.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
-<script src="js/webrtc/PeerConnection.js?v=2.3"></script>
-<script src="js/game/RecipeData.js?v=2.3"></script>
-<script src="js/game/GameState.js?v=2.3"></script>
-<script src="js/game/Station.js?v=2.3"></script>
-<script src="js/game/OrderManager.js?v=2.3"></script>
-<script src="js/game/KitchenScene.js?v=2.3"></script>
-<script src="js/network/GameSync.js?v=2.3"></script>
-<script src="js/ui/HUD.js?v=2.3"></script>
-<script src="js/ui/InteractButton.js?v=2.3"></script>
-<script src="js/main.js?v=2.3"></script>
+<script src="js/webrtc/PeerConnection.js?v=2.4"></script>
+<script src="js/game/RecipeData.js?v=2.4"></script>
+<script src="js/game/GameState.js?v=2.4"></script>
+<script src="js/game/Station.js?v=2.4"></script>
+<script src="js/game/OrderManager.js?v=2.4"></script>
+<script src="js/game/KitchenScene.js?v=2.4"></script>
+<script src="js/network/GameSync.js?v=2.4"></script>
+<script src="js/ui/HUD.js?v=2.4"></script>
+<script src="js/ui/InteractButton.js?v=2.4"></script>
+<script src="js/main.js?v=2.4"></script>
 </body>
 </html>

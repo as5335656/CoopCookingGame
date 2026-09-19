@@ -293,6 +293,22 @@ h2 {
   color: #f5ead9;
 }
 
+.palette-btn.armed {
+  background: #e8804a;
+  border-color: #ffcf8f;
+  color: #1a1410;
+}
+
+#btn-delete-mode.active {
+  background: #c0392b;
+  border-color: #ff6b6b;
+  color: #fff;
+}
+
+#edit-place-hint.hidden {
+  display: none;
+}
+
 #edit-output {
   flex: 1;
   min-height: 120px;

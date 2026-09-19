@@ -104,8 +104,10 @@ const PLAYER_TEXTURES = {
 };
 const FACING_CHANGE_THRESHOLD = 0.4; // px/frame,超過這個位移量才判斷是在往左/往右走
 
-// 編輯模式底下「新增物件」的可選類型清單
+// 編輯模式底下「新增物件」的可選類型清單。
+// 桌子/檯面是地基,要先放;其他廚具要先點選種類(會標記成選取中),再點一個空桌子把它放上去。
 const STATION_TYPE_PALETTE = [
+  { type: 'counter', shortLabel: '桌子/檯面(先放這個當地基)' },
   { type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', shortLabel: '材料箱(馬鈴薯)' },
   { type: 'ingredient_source', itemType: 'beef_raw', shortLabel: '材料箱(生牛肉)' },
   { type: 'ingredient_source', itemType: 'chicken_raw', shortLabel: '材料箱(生雞肉)' },
@@ -121,11 +123,12 @@ const STATION_TYPE_PALETTE = [
   { type: 'workbench', emoji: '', shortLabel: '工作台' },
   { type: 'pass_window', emoji: '🛎️', shortLabel: '出餐口' },
   { type: 'dispenser', recipeId: 'drink', emoji: '🥤', shortLabel: '飲料機' },
-  { type: 'table', customerEmoji: '🐼', shortLabel: '桌子' }
+  { type: 'table', customerEmoji: '🐼', shortLabel: '顧客桌位' }
 ];
 
 // 編輯模式「調整大小」下拉選單用的種類名稱對照。
 const TYPE_LABELS = {
+  counter: '桌子/檯面',
   ingredient_source: '材料箱',
   cooking: '鍋具',
   cutting: '鉆板',
@@ -144,7 +147,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.3';
+    const v = '?v=2.4';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -285,27 +288,23 @@ class KitchenScene extends Phaser.Scene {
   }
 
   // 所有站點都用方形(不再用圓形),不顯示名稱文字。
-  // def.img(廚具自己的圖,例如平底鍋/鉆板/取盤):圖片本身已經含有檯面,直接整塊顯示,不疊色塊底。
-  // 其餘(材料箱、垃圾桶、出餐口...):維持色塊底 + 圖示(itemType 對應到圖片就用圖片,不然用 emoji)。
+  // def.img(廚具自己的圖,例如平底鍋/鉆板/取盤):圖片本身已經含有檯面,直接整塊顯示當底。
+  // 其餘(材料箱、垃圾桶、出餐口、空桌子...):用桌面圖(table_wood)當底,圖示疊在上面
+  // (itemType 對應到食材圖就用食材圖,不然用 emoji),不再用色塊當背景。
   createEquipmentView(def) {
     const container = this.add.container(def.x, def.y);
     const size = def.size || 64;
 
     const ownArtKey = def.img || null;
     const iconImgKey = !ownArtKey && def.itemType ? itemImageKey(def.itemType) : null;
+    const bg = this.add.image(0, 0, ownArtKey || 'table_wood').setDisplaySize(size, size);
+    const outline = this.add.rectangle(0, 0, size, size, 0x000000, 0).setStrokeStyle(3, 0xf5ead9);
 
-    let bg = null;
-    let ownArt = null;
     let icon = null;
-    if (ownArtKey) {
-      ownArt = this.add.image(0, 0, ownArtKey).setDisplaySize(size, size);
-    } else {
-      bg = this.add.rectangle(0, 0, size, size, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
-      if (iconImgKey) {
-        icon = this.add.image(0, -2, iconImgKey).setDisplaySize(size * 0.6, size * 0.6);
-      } else if (def.emoji) {
-        icon = this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5);
-      }
+    if (iconImgKey) {
+      icon = this.add.image(0, -2, iconImgKey).setDisplaySize(size * 0.6, size * 0.6);
+    } else if (def.emoji) {
+      icon = this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5);
     }
 
     const progressBg = this.add.rectangle(0, 42, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
@@ -313,13 +312,11 @@ class KitchenScene extends Phaser.Scene {
     const heldItemText = this.add.text(0, -34, '', { fontSize: '22px' }).setOrigin(0.5);
     const heldItemImage = this.add.image(0, -34, iconImgKey || 'equip_plate').setDisplaySize(30, 30).setVisible(false);
 
-    const parts = [progressBg, progressBar, heldItemText, heldItemImage];
-    if (ownArt) parts.unshift(ownArt);
-    if (bg) parts.unshift(bg);
+    const parts = [bg, outline, progressBg, progressBar, heldItemText, heldItemImage];
     if (icon) parts.push(icon);
     container.add(parts);
 
-    return { container, bg: bg || ownArt, hasOwnArt: !!ownArt, progressBg, progressBar, heldItemText, heldItemImage, def };
+    return { container, bg, outline, hasOwnArt: !!ownArtKey, progressBg, progressBar, heldItemText, heldItemImage, def };
   }
 
   // 桌子用實際的木紋桌面圖片,食物/飲料會實際「擺在桌面上」而不是用文字泡泡飄在空中。
@@ -540,13 +537,16 @@ class KitchenScene extends Phaser.Scene {
     document.getElementById('btn-interact').style.display = 'none';
 
     this.editedLayout = {}; // { [id]: {x, y} },記錄被拖過的最終位置
-    this.dynamicDefs = {}; // { [id]: def },記錄編輯模式下新增的物件完整定義
+    this.dynamicDefs = {}; // { [id]: def },記錄編輯模式下新增/被改種類的物件完整定義(優先於 STATION_LAYOUT)
     this.nextEditId = {};
     this.sizeFilter = 'all'; // 目前大小調整要套用在哪個種類,'all' = 全部物件
+    this.pendingGadgetType = null; // 目前選好、等著點一個空桌子放上去的廚具範本
+    this.armedBtnEl = null;
+    this.deleteMode = false;
 
     this.sizes = {}; // { [id]: size },每個物件各自的大小
     for (const id in this.stationSprites) {
-      const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
+      const base = this.dynamicDefs[id] || STATION_LAYOUT[id];
       const isTable = this.stationSprites[id].isTable;
       this.sizes[id] = (base && base.size) || (isTable ? 68 : 64);
     }
@@ -556,12 +556,14 @@ class KitchenScene extends Phaser.Scene {
     }
 
     this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+      if (this.deleteMode || this.pendingGadgetType) return; // 刪除/放置模式下不要順便被拖走
       const resolved = this.resolveCollision(gameObject.stationId, dragX, dragY, this.sizes[gameObject.stationId]);
       gameObject.x = resolved.x;
       gameObject.y = resolved.y;
     });
 
     this.input.on('dragend', (pointer, gameObject) => {
+      if (this.deleteMode || this.pendingGadgetType) return;
       this.editedLayout[gameObject.stationId] = {
         x: Math.round(gameObject.x),
         y: Math.round(gameObject.y)
@@ -574,26 +576,20 @@ class KitchenScene extends Phaser.Scene {
       const btn = document.createElement('button');
       btn.className = 'palette-btn';
       btn.textContent = '+ ' + tpl.shortLabel;
-      btn.onclick = () => this.addStation(tpl);
+      if (tpl.type === 'counter') {
+        // 桌子/檯面本身是地基,直接建立,不用兩段式放置。
+        btn.onclick = () => this.addStation(tpl);
+      } else {
+        btn.onclick = () => this.toggleArmGadget(tpl, btn);
+      }
       palette.appendChild(btn);
     });
 
-    const filterSelect = document.getElementById('size-type-filter');
-    filterSelect.innerHTML = '';
-    const allOpt = document.createElement('option');
-    allOpt.value = 'all';
-    allOpt.textContent = '全部物件';
-    filterSelect.appendChild(allOpt);
-    for (const type in TYPE_LABELS) {
-      const opt = document.createElement('option');
-      opt.value = type;
-      opt.textContent = TYPE_LABELS[type];
-      filterSelect.appendChild(opt);
-    }
-    filterSelect.value = 'all';
-    filterSelect.onchange = () => {
-      this.sizeFilter = filterSelect.value;
-      this.updateSizeDisplay();
+    document.getElementById('btn-delete-mode').onclick = (e) => {
+      this.deleteMode = !this.deleteMode;
+      if (this.deleteMode) this.cancelArmedGadget();
+      e.target.textContent = '刪除模式:' + (this.deleteMode ? '開啟(點物件刪除)' : '關閉');
+      e.target.classList.toggle('active', this.deleteMode);
     };
 
     this.updateSizeDisplay();
@@ -633,15 +629,93 @@ class KitchenScene extends Phaser.Scene {
     container.setSize(size, size);
     container.setInteractive();
     this.input.setDraggable(container);
+    container.on('pointerdown', () => this.handleEditObjectTap(id));
+  }
+
+  // 點場景裡的物件:刪除模式下直接刪掉;放置模式下如果點到空桌子就把選好的廚具放上去;
+  // 平常點一下則是「指定這個物件的種類」給下面的大小調整用(不用下拉選單)。
+  handleEditObjectTap(id) {
+    if (this.deleteMode) {
+      this.deleteStation(id);
+      return;
+    }
+    if (this.pendingGadgetType) {
+      this.attachGadgetToCounter(id, this.pendingGadgetType);
+      return;
+    }
+    const base = this.dynamicDefs[id] || STATION_LAYOUT[id];
+    if (base) {
+      this.sizeFilter = base.type;
+      this.updateSizeDisplay();
+    }
+  }
+
+  toggleArmGadget(tpl, btnEl) {
+    if (this.deleteMode) {
+      this.deleteMode = false;
+      const delBtn = document.getElementById('btn-delete-mode');
+      delBtn.textContent = '刪除模式:關閉';
+      delBtn.classList.remove('active');
+    }
+    if (this.pendingGadgetType === tpl) {
+      this.cancelArmedGadget();
+      return;
+    }
+    this.cancelArmedGadget();
+    this.pendingGadgetType = tpl;
+    this.armedBtnEl = btnEl;
+    btnEl.classList.add('armed');
+    document.getElementById('edit-place-hint').classList.remove('hidden');
+  }
+
+  cancelArmedGadget() {
+    this.pendingGadgetType = null;
+    if (this.armedBtnEl) this.armedBtnEl.classList.remove('armed');
+    this.armedBtnEl = null;
+    document.getElementById('edit-place-hint').classList.add('hidden');
+  }
+
+  // 把選好的廚具範本「貼」到一個現有的空桌子上(保留桌子原本的位置/大小),
+  // 桌子本身的站點資料被整個換成新廚具的定義,不會兩個疊在一起。
+  attachGadgetToCounter(id, tpl) {
+    const view = this.stationSprites[id];
+    const base = this.dynamicDefs[id] || STATION_LAYOUT[id];
+    if (!view || !base || base.type !== 'counter') return; // 只能點還沒放廚具的空桌子
+
+    const pos = this.editedLayout[id] || { x: view.container.x, y: view.container.y };
+    const size = this.sizes[id] || 64;
+    const newDef = Object.assign({}, tpl, { x: pos.x, y: pos.y, size });
+    this.dynamicDefs[id] = newDef;
+
+    view.container.destroy();
+    const newView = newDef.type === 'table' ? this.createTableView(newDef) : this.createEquipmentView(newDef);
+    this.stationSprites[id] = newView;
+    this.makeDraggable(id, newView.container);
+    this.applyStationSize(id, size);
+
+    const stationState = createStationState(newDef);
+    if (stationState) this.state.stations[id] = stationState;
+
+    this.cancelArmedGadget();
+    this.updateEditOutput();
+  }
+
+  deleteStation(id) {
+    const view = this.stationSprites[id];
+    if (!view) return;
+    view.container.destroy();
+    delete this.stationSprites[id];
+    delete this.editedLayout[id];
+    delete this.dynamicDefs[id];
+    delete this.sizes[id];
+    delete this.state.stations[id];
+    this.updateEditOutput();
   }
 
   applyStationSize(id, size) {
     const view = this.stationSprites[id];
-    if (view.isTable || view.hasOwnArt) {
-      view.bg.setDisplaySize(size, size);
-    } else {
-      view.bg.setSize(size, size);
-    }
+    view.bg.setDisplaySize(size, size);
+    if (view.outline) view.outline.setSize(size, size);
     view.container.setSize(size, size);
   }
 
@@ -649,7 +723,7 @@ class KitchenScene extends Phaser.Scene {
   getFilteredIds() {
     const ids = [];
     for (const id in this.stationSprites) {
-      const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
+      const base = this.dynamicDefs[id] || STATION_LAYOUT[id];
       if (this.sizeFilter === 'all' || (base && base.type === this.sizeFilter)) {
         ids.push(id);
       }
@@ -661,6 +735,8 @@ class KitchenScene extends Phaser.Scene {
     const ids = this.getFilteredIds();
     const size = ids.length > 0 ? this.sizes[ids[0]] : 64;
     document.getElementById('size-display').textContent = size;
+    const label = this.sizeFilter === 'all' ? '全部物件' : (TYPE_LABELS[this.sizeFilter] || this.sizeFilter);
+    document.getElementById('size-type-label').textContent = label;
   }
 
   // 只調整目前選到的種類(或全部)的物件大小。
@@ -711,7 +787,7 @@ class KitchenScene extends Phaser.Scene {
   updateEditOutput() {
     const merged = {};
     for (const id in this.stationSprites) {
-      const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
+      const base = this.dynamicDefs[id] || STATION_LAYOUT[id];
       const posOverride = this.editedLayout[id];
       merged[id] = Object.assign({}, base, { size: this.sizes[id] || 64 });
       if (posOverride) {
@@ -863,11 +939,9 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
-  // 部分廚具(平底鍋/鉆板)用的是自帶檯面的圖片(Image),沒有色塊外框(Rectangle)可以變色,
-  // 這種情況就跳過邊框變色,只靠進度條/圖示表示狀態。
   setStationBorder(view, color) {
-    if (view.bg && typeof view.bg.setStrokeStyle === 'function') {
-      view.bg.setStrokeStyle(3, color);
+    if (view.outline && typeof view.outline.setStrokeStyle === 'function') {
+      view.outline.setStrokeStyle(3, color);
     }
   }
 
@@ -923,7 +997,7 @@ class KitchenScene extends Phaser.Scene {
           view.progressBar.setVisible(false);
           this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
         }
-      } else if (st.type === 'pass_window' || st.type === 'workbench') {
+      } else if (st.type === 'pass_window' || st.type === 'workbench' || st.type === 'counter') {
         this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
       } else if (st.type === 'table') {
         // 編輯模式下不管實際 state 內容為何,一律當成空桌顯示,絕對不會出現顧客。

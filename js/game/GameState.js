@@ -24,6 +24,9 @@ function createStationState(def) {
     return { type: 'pass_window', itemHeld: null };
   } else if (def.type === 'workbench') {
     return { type: 'workbench', itemHeld: null };
+  } else if (def.type === 'counter') {
+    // 還沒放廚具的空桌子:遊戲中當成通用的暫放點,行為跟工作台一樣(放一樣東西/拿回來)。
+    return { type: 'counter', itemHeld: null };
   } else if (def.type === 'trash') {
     return { type: 'trash' };
   } else if (def.type === 'table') {
