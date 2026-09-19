@@ -21,12 +21,13 @@ function createStationState(def) {
   } else if (def.type === 'dispenser') {
     return { type: 'dispenser', recipeId: def.recipeId };
   } else if (def.type === 'pass_window') {
-    return { type: 'pass_window', itemHeld: null };
+    // itemHeld 放一般單一物品;plateStack 專門給盤子疊放(可以疊不只一個),兩者互斥。
+    return { type: 'pass_window', itemHeld: null, plateStack: [] };
   } else if (def.type === 'workbench') {
-    return { type: 'workbench', itemHeld: null };
+    return { type: 'workbench', itemHeld: null, plateStack: [] };
   } else if (def.type === 'counter') {
-    // 還沒放廚具的空桌子:遊戲中當成通用的暫放點,行為跟工作台一樣(放一樣東西/拿回來)。
-    return { type: 'counter', itemHeld: null };
+    // 還沒放廚具的空桌子:遊戲中當成通用的暫放點,行為跟工作台一樣(放一樣東西/拿回來),盤子可以疊放。
+    return { type: 'counter', itemHeld: null, plateStack: [] };
   } else if (def.type === 'trash') {
     return { type: 'trash' };
   } else if (def.type === 'table') {

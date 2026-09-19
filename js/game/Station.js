@@ -128,16 +128,24 @@ function interactStation(state, stationId, role) {
 
     case 'pass_window':
     case 'workbench':
-    case 'counter':
-      // 三者行為相同:拿著東西且站點是空的 -> 放下;沒拿東西且站點有東西 -> 拿起來
-      if (player.carrying && !st.itemHeld) {
+    case 'counter': {
+      // 三者行為相同:拿著東西且站點是空的 -> 放下;沒拿東西且站點有東西 -> 拿起來。
+      // 盤子(isPlate,不管是空盤還是還在組合中)例外:可以一直往上疊,不受「一格只能放一樣」限制。
+      const carryingPlate = player.carrying && typeof player.carrying === 'object' && player.carrying.isPlate;
+      if (carryingPlate && !st.itemHeld) {
+        st.plateStack.push(player.carrying);
+        player.carrying = null;
+      } else if (player.carrying && !st.itemHeld && st.plateStack.length === 0) {
         st.itemHeld = player.carrying;
         player.carrying = null;
+      } else if (!player.carrying && st.plateStack.length > 0) {
+        player.carrying = st.plateStack.pop();
       } else if (!player.carrying && st.itemHeld) {
         player.carrying = st.itemHeld;
         st.itemHeld = null;
       }
       break;
+    }
 
     case 'trash':
       if (player.carrying) {

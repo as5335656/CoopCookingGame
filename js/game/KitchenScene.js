@@ -147,7 +147,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.5';
+    const v = '?v=2.6';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -158,7 +158,7 @@ class KitchenScene extends Phaser.Scene {
     this.load.image('p2_right', 'assets/sprites/p2_right.png' + v);
     this.load.image('p2_idle', 'assets/sprites/p2_idle.png' + v);
 
-    // 廚具(圖片本身就含有檯面,直接當整個方塊顯示,不用另外疊色塊底)
+    // 廚具圖示(去背後疊在桌面圖上顯示,見 createEquipmentView)
     this.load.image('equip_pan', 'assets/sprites/pan.png' + v);
     this.load.image('equip_cutting_board', 'assets/sprites/cutting_board.png' + v);
     this.load.image('equip_plate', 'assets/sprites/plate.png' + v);
@@ -288,20 +288,22 @@ class KitchenScene extends Phaser.Scene {
   }
 
   // 所有站點都用方形(不再用圓形),不顯示名稱文字。
-  // def.img(廚具自己的圖,例如平底鍋/鉆板/取盤):圖片本身已經含有檯面,直接整塊顯示當底。
-  // 其餘(材料箱、垃圾桶、出餐口、空桌子...):用桌面圖(table_wood)當底,圖示疊在上面
-  // (itemType 對應到食材圖就用食材圖,不然用 emoji),不再用色塊當背景。
+  // 不管是材料箱、垃圾桶、出餐口、空桌子,還是有自己專屬圖片的廚具(平底鍋/鉆板/取盤),
+  // 一律先鋪一層桌面圖(table_wood)當底,圖示(廚具圖/食材圖/emoji)疊在上面——
+  // 廚具圖本身去背後只是單純的物件形狀,並沒有內建檯面,所以也要跟材料箱一樣「放在桌上」。
   createEquipmentView(def) {
     const container = this.add.container(def.x, def.y);
     const size = def.size || 64;
 
     const ownArtKey = def.img || null;
     const iconImgKey = !ownArtKey && def.itemType ? itemImageKey(def.itemType) : null;
-    const bg = this.add.image(0, 0, ownArtKey || 'table_wood').setDisplaySize(size, size);
+    const bg = this.add.image(0, 0, 'table_wood').setDisplaySize(size, size);
     const outline = this.add.rectangle(0, 0, size, size, 0x000000, 0).setStrokeStyle(3, 0xf5ead9);
 
     let icon = null;
-    if (iconImgKey) {
+    if (ownArtKey) {
+      icon = this.add.image(0, -2, ownArtKey).setDisplaySize(size * 0.8, size * 0.8);
+    } else if (iconImgKey) {
       icon = this.add.image(0, -2, iconImgKey).setDisplaySize(size * 0.6, size * 0.6);
     } else if (def.emoji) {
       icon = this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5);
@@ -312,11 +314,18 @@ class KitchenScene extends Phaser.Scene {
     const heldItemText = this.add.text(0, -34, '', { fontSize: '22px' }).setOrigin(0.5);
     const heldItemImage = this.add.image(0, -34, iconImgKey || 'equip_plate').setDisplaySize(30, 30).setVisible(false);
 
-    const parts = [bg, outline, progressBg, progressBar, heldItemText, heldItemImage];
+    // 盤子疊放用:最多視覺上疊 4 層(每層往上偏移一點),超過 4 個就在最上面顯示總數字。
+    const plateStackImages = [];
+    for (let i = 0; i < 4; i++) {
+      plateStackImages.push(this.add.image(0, -30 - i * 6, 'equip_plate').setDisplaySize(32, 32).setVisible(false));
+    }
+    const plateStackCountText = this.add.text(14, -46, '', { fontSize: '13px', color: '#ffffff', fontStyle: 'bold', backgroundColor: '#00000080' }).setOrigin(0.5).setVisible(false);
+
+    const parts = [bg, outline, progressBg, progressBar, heldItemText, heldItemImage, ...plateStackImages, plateStackCountText];
     if (icon) parts.push(icon);
     container.add(parts);
 
-    return { container, bg, outline, hasOwnArt: !!ownArtKey, progressBg, progressBar, heldItemText, heldItemImage, def };
+    return { container, bg, outline, hasOwnArt: !!ownArtKey, progressBg, progressBar, heldItemText, heldItemImage, plateStackImages, plateStackCountText, def };
   }
 
   // 桌子用實際的木紋桌面圖片,食物/飲料會實際「擺在桌面上」而不是用文字泡泡飄在空中。
@@ -939,6 +948,20 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
+  // 盤子疊放視覺:最多疊 4 層(每層往上偏移一點點,看起來像疊高),超過 4 個在最上面補一個數字角標。
+  setPlateStackVisual(view, plateStack) {
+    const count = plateStack ? plateStack.length : 0;
+    const visibleLayers = Math.min(count, view.plateStackImages.length);
+    for (let i = 0; i < view.plateStackImages.length; i++) {
+      view.plateStackImages[i].setVisible(i < visibleLayers);
+    }
+    if (count > view.plateStackImages.length) {
+      view.plateStackCountText.setText('×' + count).setVisible(true);
+    } else {
+      view.plateStackCountText.setVisible(false);
+    }
+  }
+
   setStationBorder(view, color) {
     if (view.outline && typeof view.outline.setStrokeStyle === 'function') {
       view.outline.setStrokeStyle(3, color);
@@ -998,7 +1021,13 @@ class KitchenScene extends Phaser.Scene {
           this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
         }
       } else if (st.type === 'pass_window' || st.type === 'workbench' || st.type === 'counter') {
-        this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
+        this.setPlateStackVisual(view, st.plateStack);
+        if (st.plateStack.length === 0) {
+          this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
+        } else {
+          view.heldItemImage.setVisible(false);
+          view.heldItemText.setText('');
+        }
       } else if (st.type === 'table') {
         // 編輯模式下不管實際 state 內容為何,一律當成空桌顯示,絕對不會出現顧客。
         if (st.occupied && !this.editMode) {
