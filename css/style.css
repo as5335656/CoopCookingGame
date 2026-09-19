@@ -1,0 +1,264 @@
+* {
+  box-sizing: border-box;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: #2b2018;
+  color: #f5ead9;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang TC", "Segoe UI", sans-serif;
+  touch-action: manipulation;
+}
+
+.screen {
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 100%;
+  padding: 24px;
+  gap: 16px;
+  text-align: center;
+}
+
+.screen.active {
+  display: flex;
+}
+
+h1 {
+  font-size: 28px;
+  margin: 0 0 8px 0;
+}
+
+h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+.panel {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 320px;
+}
+
+.btn {
+  flex: 1;
+  padding: 14px 20px;
+  font-size: 17px;
+  border: none;
+  border-radius: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  color: #fff;
+}
+
+.btn-primary {
+  background: #e8804a;
+}
+
+.btn-secondary {
+  background: #4a5a4e;
+}
+
+.btn:active {
+  filter: brightness(0.85);
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.input-code {
+  flex: 1;
+  padding: 14px;
+  font-size: 20px;
+  text-align: center;
+  border-radius: 12px;
+  border: 2px solid #6b5a45;
+  background: #3a2c20;
+  color: #f5ead9;
+  letter-spacing: 4px;
+  text-transform: uppercase;
+  min-width: 0;
+}
+
+.room-code {
+  font-size: 48px;
+  font-weight: 700;
+  letter-spacing: 8px;
+  background: #3a2c20;
+  border-radius: 16px;
+  padding: 16px 24px;
+  border: 2px solid #e8804a;
+}
+
+.hint {
+  opacity: 0.75;
+  font-size: 14px;
+}
+
+.status-text {
+  min-height: 20px;
+  font-size: 14px;
+  color: #ffcf8f;
+}
+
+.error-text {
+  min-height: 20px;
+  font-size: 14px;
+  color: #ff6b6b;
+}
+
+.pairing-view.hidden {
+  display: none;
+}
+
+/* ---- 遊戲畫面 ---- */
+
+.game-screen {
+  padding: 0;
+  position: relative;
+  justify-content: flex-start;
+}
+
+/* 遊戲畫面是橫向設計。手機直拿時,顯示「請橫放」提示,不強行用 CSS 轉,
+   避免跟 Phaser 的縮放計算打架導致畫面跑位。 */
+#rotate-prompt {
+  display: none;
+}
+
+@media (orientation: portrait) {
+  #screen-game.active #game-canvas-container,
+  #screen-game.active #hud-overlay,
+  #screen-game.active #joystick-zone,
+  #screen-game.active #btn-interact {
+    display: none;
+  }
+  #screen-game.active #rotate-prompt {
+    display: flex;
+    position: fixed;
+    inset: 0;
+    z-index: 999;
+    background: #2b2018;
+    color: #f5ead9;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 12px;
+    text-align: center;
+    padding: 24px;
+    font-size: 18px;
+  }
+  #rotate-prompt .rotate-icon {
+    font-size: 48px;
+  }
+}
+
+#game-canvas-container {
+  width: 100%;
+  height: 100%;
+}
+
+#game-canvas-container canvas {
+  display: block;
+  margin: 0 auto;
+}
+
+#hud-overlay {
+  position: absolute;
+  top: env(safe-area-inset-top, 10px);
+  left: 0;
+  right: 0;
+  display: flex;
+  justify-content: space-between;
+  padding: 10px 16px;
+  pointer-events: none;
+  z-index: 10;
+}
+
+#hud-timer,
+#hud-score {
+  background: rgba(58, 44, 32, 0.85);
+  color: #f5ead9;
+  padding: 6px 14px;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+#joystick-zone {
+  position: absolute;
+  left: 20px;
+  bottom: env(safe-area-inset-bottom, 20px);
+  width: 130px;
+  height: 130px;
+  z-index: 10;
+}
+
+.joystick-base {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: rgba(58, 44, 32, 0.4);
+  border: 2px solid rgba(245, 234, 217, 0.5);
+  border-radius: 50%;
+}
+
+.joystick-knob {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 54px;
+  height: 54px;
+  margin: -27px 0 0 -27px;
+  background: rgba(232, 128, 74, 0.9);
+  border-radius: 50%;
+  transition: transform 0.02s linear;
+}
+
+#btn-interact {
+  position: absolute;
+  right: 24px;
+  bottom: env(safe-area-inset-bottom, 30px);
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(232, 128, 74, 0.9);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 700;
+  z-index: 10;
+}
+
+#btn-interact.pressed {
+  background: rgba(200, 100, 50, 1);
+}
+
+#result-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(20, 15, 10, 0.9);
+  z-index: 20;
+}
+
+#result-overlay.hidden {
+  display: none;
+}
+
+#result-overlay .btn {
+  max-width: 200px;
+}

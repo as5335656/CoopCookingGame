@@ -1,42 +1,55 @@
 # CoopCookingGame
 
-雙人合作手機遊戲,類似《胡鬧廚房》(Overcooked)玩法,支援區域網路(LAN)雙機連線。
+雙人合作手機網頁遊戲,類似《胡鬧廚房》玩法,兩支 iPhone 透過 WebRTC 直連遊玩,不需要 App Store,不需要 Mac,遊戲進行中不需要電腦。
 
 ## 技術棧
-- Unity 2022.3 LTS (C#)
-- 2D 模板
-- 連線:Unity Netcode for GameObjects + Unity Transport(LAN)
-- 目標平台:Android
+- 純前端網頁:HTML5 + Canvas
+- 遊戲框架:Phaser.js
+- 連線:PeerJS(WebRTC 封裝),用短房號配對,配對完成後雙方直接 P2P 傳資料
 
-## 環境安裝進度
-- [x] Git
-- [x] Unity Hub
-- [ ] Unity Editor 2022.3 LTS + Android Build Support (含 OpenJDK, Android SDK/NDK)
-- [ ] Unity 專案建立(2D 模板)
-- [ ] Netcode for GameObjects 套件安裝
+## 怎麼玩(開發測試階段)
+1. 在電腦上跑本機伺服器:`node dev-server.js`
+2. 兩支 iPhone 連到跟電腦同一個 WiFi
+3. Safari 開啟 `http://<電腦的區網IP>:3000`
+4. 一支按「建立房間」拿到房號,另一支輸入房號「加入房間」
 
-## 專案結構(Unity 專案建立後)
+## 專案結構
 ```
-Assets/
-  Scripts/
-    Player/        # 玩家移動、操作
-    Networking/     # 連線、房間配對
-    Gameplay/       # 料理/任務相關邏輯
-    UI/             # 觸控搖桿、按鈕、選單
-  Scenes/
-  Prefabs/
-  Sprites/          # 美術素材放這裡
-  Audio/
-ProjectSettings/
-Packages/
+index.html          # 主選單 -> 配對畫面 -> 遊戲畫面
+css/style.css
+js/
+  main.js                 # 畫面狀態機
+  webrtc/PeerConnection.js
+  game/                   # Phaser 場景、玩家、站點、訂單邏輯
+  ui/                     # 觸控搖桿、互動按鈕、HUD
+  network/GameSync.js     # Host 權威同步層
+vendor/                   # Phaser.js、PeerJS(本地檔案,不依賴 CDN)
+assets/sprites, assets/audio
+dev-server.js             # 開發用本機靜態檔案伺服器
 ```
 
-## 開發路線
-1. 單機原型(角色移動、互動物件、任務流程)
-2. 加入 Netcode 連線層(同步移動/互動)
-3. 區網配對流程(Host 開房 / Client 加入)
-4. 觸控 UI(虛擬搖桿 + 互動按鈕)
-5. 打包 APK,雙機實測
+## 角色分工(第一關)
+兩人共用同一個廚房場景,依場景佈局分工(不是程式碼寫死的角色類別):
+- 左側:料理站(切菜、炸鍋、出餐口)
+- 右側:外場(顧客桌位),顧客主要從右側/門口進來
 
-## 參考素材
-- 參考影片:下載中,待截圖分析玩法細節
+## 開發進度
+- [x] 專案骨架
+- [x] PeerJS 房號配對(已用自動化瀏覽器測試驗證兩台裝置能配對成功)
+- [x] 廚房場景與通用 Player/Station 系統(薯條 + 飲料兩道菜,切/炸/裝盤/出餐口/垃圾桶/顧客桌)
+- [x] 訂單與關卡邏輯(隨機生成訂單、耐心倒數、3分鐘計時、送餐計分)
+- [x] 觸控 UI(虛擬搖桿 + 互動按鈕,含直向手機的「請橫放」提示)
+- [x] 核心邏輯自動化測試(22項測試全過)+ 兩裝置配對/連線/互動全流程自動化測試
+- [ ] 實機雙 iPhone 測試(目前只在電腦瀏覽器模擬測過,還沒在真手機上測)
+- [ ] 美術素材替換(目前用 emoji 佔位)
+- [ ] 部署到 GitHub Pages(之後才做,擺脫電腦依賴)
+
+## 美術素材
+目前全部用 emoji 佔位(🥔🍟🥤🐱🦊等),還沒有真正的美術圖。
+等使用者提供 PNG 後,只需要在 `KitchenScene.js` 把對應的 emoji Text 物件換成 Phaser Image/Sprite 即可,不影響其他邏輯。
+建議:透明背景、英文命名、同類型素材尺寸盡量一致。
+
+## 已知限制
+- Host(建立房間的那支手機)的瀏覽器分頁在遊戲中不能被切到背景或關閉,否則遊戲邏輯會停止(P2P 架構的取捨)
+- 配對當下手機需要能連上網路(PeerJS 免費公開訊號伺服器),配對成功後遊戲資料才是純手機對手機直傳
+- 目前只有 1 關,固定 3 分鐘、2 道菜色(薯條、飲料)

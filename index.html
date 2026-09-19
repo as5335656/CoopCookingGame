@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+<title>雙人合作餐廳</title>
+<link rel="stylesheet" href="css/style.css" />
+</head>
+<body>
+
+<div id="screen-menu" class="screen active">
+  <h1>雙人合作餐廳</h1>
+
+  <div class="panel">
+    <button id="btn-create-room" class="btn btn-primary">建立房間</button>
+  </div>
+
+  <div class="panel">
+    <input id="input-room-code" class="input-code" type="text" placeholder="輸入房號" maxlength="6" autocapitalize="characters" autocomplete="off" />
+    <button id="btn-join-room" class="btn btn-secondary">加入房間</button>
+  </div>
+
+  <p id="menu-error" class="error-text"></p>
+</div>
+
+<div id="screen-pairing" class="screen">
+  <h2 id="pairing-title">配對中...</h2>
+
+  <div id="pairing-host-view" class="pairing-view hidden">
+    <p>把這組房號給對方輸入:</p>
+    <div id="room-code-display" class="room-code"></div>
+    <p class="hint">等待對方加入...</p>
+  </div>
+
+  <div id="pairing-join-view" class="pairing-view hidden">
+    <p class="hint">正在連線到房間 <span id="joining-code-label"></span> ...</p>
+  </div>
+
+  <p id="pairing-status" class="status-text"></p>
+  <button id="btn-pairing-cancel" class="btn btn-secondary">取消</button>
+</div>
+
+<div id="screen-game" class="screen game-screen">
+  <div id="rotate-prompt">
+    <div class="rotate-icon">📱</div>
+    <p>請將手機橫放遊玩</p>
+  </div>
+
+  <div id="game-canvas-container"></div>
+
+  <div id="hud-overlay">
+    <div id="hud-timer">3:00</div>
+    <div id="hud-score">$0</div>
+  </div>
+
+  <div id="joystick-zone"></div>
+  <button id="btn-interact">互動</button>
+
+  <div id="result-overlay" class="hidden">
+    <h2>時間到!</h2>
+    <p id="result-score"></p>
+    <button id="btn-play-again" class="btn btn-primary">再玩一次</button>
+  </div>
+</div>
+
+<script src="vendor/phaser.min.js"></script>
+<script src="vendor/peerjs.min.js"></script>
+<script src="js/webrtc/PeerConnection.js"></script>
+<script src="js/game/RecipeData.js"></script>
+<script src="js/game/GameState.js"></script>
+<script src="js/game/Station.js"></script>
+<script src="js/game/OrderManager.js"></script>
+<script src="js/game/KitchenScene.js"></script>
+<script src="js/network/GameSync.js"></script>
+<script src="js/ui/HUD.js"></script>
+<script src="js/ui/VirtualJoystick.js"></script>
+<script src="js/ui/InteractButton.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
