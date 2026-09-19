@@ -6,6 +6,7 @@ const WORLD_H = 540;
 const MOVE_SPEED = 220; // px/sec
 const INTERACT_RADIUS = 72;
 const MOVE_ARRIVE_DIST = 4;
+const PLAYER_SIZE = 64; // 角色碰撞用的方形邊長,跟顯示大小一致
 
 // 中間走道兩邊都不能穿越,雙方各自鎖在自己的區域,只能靠出餐口交接東西。
 const ZONE_MAX_X = { host: 450, joiner: WORLD_W - 30 };
@@ -30,9 +31,27 @@ const DEFAULT_STATION_LAYOUT = {
 
 const LEVEL_COUNT = 8;
 
-// 8 關各自一份佈局資料,一開始都先複製同一份預設樣板。
-const LEVEL_LAYOUTS = {};
-for (let i = 1; i <= LEVEL_COUNT; i++) {
+// 1-1 已經用編輯模式設計過:料理站集中在左上、額外加了 5 張桌子(都在左側廚房區,故意這樣設計)。
+const LEVEL_1_LAYOUT = {
+  ingredient_potato: { x: 124, y: 46, type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', label: '材料箱', size: 72 },
+  fryer_1: { x: 268, y: 49, type: 'cooking', recipeId: 'fries', emoji: '🍳', label: '油炸鍋', size: 72 },
+  plate_stack: { x: 196, y: 47, type: 'plate_stack', emoji: '🍽️', label: '取盤', size: 72 },
+  trash_bin: { x: 412, y: 50, type: 'trash', emoji: '🗑️', label: '垃圾桶', size: 72 },
+  workbench_1: { x: 340, y: 50, type: 'workbench', emoji: '', label: '工作台', size: 72 },
+  pass_window: { x: 480, y: 300, type: 'pass_window', emoji: '🛎️', label: '出餐口', size: 72 },
+  drink_dispenser: { x: 850, y: 150, type: 'dispenser', recipeId: 'drink', emoji: '🥤', label: '飲料機', size: 72 },
+  table_1: { x: 410, y: 122, type: 'table', customerEmoji: '🐼', label: '桌位1', size: 72 },
+  table_2: { x: 850, y: 420, type: 'table', customerEmoji: '🐧', label: '桌位2', size: 72 },
+  new_table_1: { x: 265, y: 483, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
+  new_table_2: { x: 337, y: 482, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
+  new_table_3: { x: 410, y: 194, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
+  new_table_4: { x: 409, y: 482, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
+  new_table_5: { x: 193, y: 482, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 }
+};
+
+// 8 關各自一份佈局資料。1-1 用上面設計好的版本,其餘還沒客製化的關卡先複製預設樣板當起點。
+const LEVEL_LAYOUTS = { 1: LEVEL_1_LAYOUT };
+for (let i = 2; i <= LEVEL_COUNT; i++) {
   LEVEL_LAYOUTS[i] = JSON.parse(JSON.stringify(DEFAULT_STATION_LAYOUT));
 }
 
@@ -98,7 +117,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.9';
+    const v = '?v=2.0';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
     this.load.image('p1_left', 'assets/sprites/p1_left.png' + v);
@@ -110,6 +129,17 @@ class KitchenScene extends Phaser.Scene {
   }
 
   create() {
+    // 配合 main.js 把畫布放大 dpr 倍,這裡用 camera zoom 縮放回邏輯座標,
+    // 場景裡其他程式碼完全不用管這件事,座標還是 0-960 x 0-540。
+    // 相機預設會置中在「放大後畫布」的中心,不是我們邏輯世界(0-960,0-540)的中心,
+    // 所以縮放之後還要額外用 centerOn 把視角拉回邏輯世界的正中央。
+    const applyZoom = () => {
+      this.cameras.main.setZoom(window.devicePixelRatio || 1);
+      this.cameras.main.centerOn(WORLD_W / 2, WORLD_H / 2);
+    };
+    applyZoom();
+    this.scale.on('resize', applyZoom);
+
     this.role = window.NET_ROLE;
     this.isHost = this.role === 'host';
     this.remoteRole = this.isHost ? 'joiner' : 'host';
@@ -330,25 +360,33 @@ class KitchenScene extends Phaser.Scene {
         const dx = target.x - pos.x;
         const dy = target.y - pos.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
+        if (dist > MOVE_ARRIVE_DIST) {
+          const moveStep = Math.min(step, dist);
+          pos.x += (dx / dist) * moveStep;
+          pos.y += (dy / dist) * moveStep;
+        }
+      }
 
-        if (dist <= MOVE_ARRIVE_DIST || step >= dist) {
-          pos.x = target.x;
-          pos.y = target.y;
+      // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣。
+      const resolved = this.resolveCollisionAgainstList(pos.x, pos.y, PLAYER_SIZE, this.buildCollisionObstacles(role));
+      pos.x = resolved.x;
+      pos.y = resolved.y;
+
+      pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
+      pos.y = Phaser.Math.Clamp(pos.y, 110, WORLD_H - 30);
+
+      // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
+      if (target) {
+        const distToTarget = Phaser.Math.Distance.Between(pos.x, pos.y, target.x, target.y);
+        if (distToTarget <= INTERACT_RADIUS) {
           this.testMoveTargets[role] = null;
-
           const stationId = this.testPendingInteract[role];
           if (stationId) {
             interactStation(this.state, stationId, role);
             this.testPendingInteract[role] = null;
           }
-        } else {
-          pos.x += (dx / dist) * step;
-          pos.y += (dy / dist) * step;
         }
       }
-
-      pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
-      pos.y = Phaser.Math.Clamp(pos.y, 110, WORLD_H - 30);
 
       const sprite = this.playerSprites[role];
       sprite.container.setPosition(pos.x, pos.y);
@@ -356,6 +394,42 @@ class KitchenScene extends Phaser.Scene {
       sprite.y = pos.y;
       this.updateFacing(role, pos.x);
     }
+  }
+
+  // 收集「這個角色」目前應該要避免重疊的東西:所有站點 + 另一位玩家。
+  buildCollisionObstacles(selfRole) {
+    const obstacles = [];
+    for (const id in this.stationSprites) {
+      const view = this.stationSprites[id];
+      const size = (view.def && view.def.size) || (view.isTable ? 68 : 64);
+      obstacles.push({ x: view.container.x, y: view.container.y, size });
+    }
+    const otherRole = selfRole === 'host' ? 'joiner' : 'host';
+    const other = this.playerSprites[otherRole];
+    obstacles.push({ x: other.x, y: other.y, size: PLAYER_SIZE });
+    return obstacles;
+  }
+
+  // 通用的方形碰撞解算:如果 (x,y) 跟清單裡任何一個障礙物重疊,
+  // 往重疊量較小的那個軸推開,讓它卡在對方邊緣,而不是直接疊上去。
+  resolveCollisionAgainstList(x, y, size, obstacles) {
+    const halfA = size / 2;
+    for (const obs of obstacles) {
+      const halfB = obs.size / 2;
+      const dx = x - obs.x;
+      const dy = y - obs.y;
+      const overlapX = halfA + halfB - Math.abs(dx);
+      const overlapY = halfA + halfB - Math.abs(dy);
+
+      if (overlapX > 0 && overlapY > 0) {
+        if (overlapX < overlapY) {
+          x += dx >= 0 ? overlapX : -overlapX;
+        } else {
+          y += dy >= 0 ? overlapY : -overlapY;
+        }
+      }
+    }
+    return { x, y };
   }
 
   // 依角色這一幀實際移動的方向切換 left/right/idle 圖片。
@@ -472,29 +546,15 @@ class KitchenScene extends Phaser.Scene {
     this.updateEditOutput();
   }
 
-  // 簡單的方形碰撞:如果移動後的位置跟其他物件重疊,往重疊量較小的那個軸推開,
-  // 讓物件卡在對方邊緣,而不是直接疊上去。
+  // 編輯模式拖拉用:跟其他站點碰撞(排除自己),沿用共用的碰撞解算邏輯。
   resolveCollision(movingId, x, y, size) {
-    const halfA = size / 2;
-    const halfB = size / 2; // 所有物件目前統一大小
+    const obstacles = [];
     for (const otherId in this.stationSprites) {
       if (otherId === movingId) continue;
       const other = this.stationSprites[otherId].container;
-
-      const dx = x - other.x;
-      const dy = y - other.y;
-      const overlapX = halfA + halfB - Math.abs(dx);
-      const overlapY = halfA + halfB - Math.abs(dy);
-
-      if (overlapX > 0 && overlapY > 0) {
-        if (overlapX < overlapY) {
-          x += dx >= 0 ? overlapX : -overlapX;
-        } else {
-          y += dy >= 0 ? overlapY : -overlapY;
-        }
-      }
+      obstacles.push({ x: other.x, y: other.y, size: this.globalSize });
     }
-    return { x, y };
+    return this.resolveCollisionAgainstList(x, y, size, obstacles);
   }
 
   addStation(tpl) {
@@ -553,12 +613,31 @@ class KitchenScene extends Phaser.Scene {
       const dy = this.moveTarget.y - this.localPos.y;
       const dist = Math.sqrt(dx * dx + dy * dy);
       const step = MOVE_SPEED * (delta / 1000);
+      if (dist > MOVE_ARRIVE_DIST) {
+        const moveStep = Math.min(step, dist);
+        this.localPos.x += (dx / dist) * moveStep;
+        this.localPos.y += (dy / dist) * moveStep;
+      }
+    }
 
-      if (dist <= MOVE_ARRIVE_DIST || step >= dist) {
-        this.localPos.x = this.moveTarget.x;
-        this.localPos.y = this.moveTarget.y;
+    // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣。
+    const resolved = this.resolveCollisionAgainstList(
+      this.localPos.x,
+      this.localPos.y,
+      PLAYER_SIZE,
+      this.buildCollisionObstacles(this.role)
+    );
+    this.localPos.x = resolved.x;
+    this.localPos.y = resolved.y;
+
+    this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
+    this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 110, WORLD_H - 30);
+
+    // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
+    if (this.moveTarget) {
+      const distToTarget = Phaser.Math.Distance.Between(this.localPos.x, this.localPos.y, this.moveTarget.x, this.moveTarget.y);
+      if (distToTarget <= INTERACT_RADIUS) {
         this.moveTarget = null;
-
         if (this.pendingInteractStationId) {
           const stationId = this.pendingInteractStationId;
           this.pendingInteractStationId = null;
@@ -568,14 +647,8 @@ class KitchenScene extends Phaser.Scene {
             GameSync.sendInteract(stationId);
           }
         }
-      } else {
-        this.localPos.x += (dx / dist) * step;
-        this.localPos.y += (dy / dist) * step;
       }
     }
-
-    this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
-    this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 110, WORLD_H - 30);
 
     const mySprite = this.playerSprites[this.role];
     mySprite.container.setPosition(this.localPos.x, this.localPos.y);

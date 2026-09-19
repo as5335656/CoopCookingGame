@@ -130,11 +130,15 @@ window.addEventListener('orientationchange', () => {
     gameStarted = true;
     showScreen('game');
 
+    // Phaser 3.80 不會自動處理高解析度螢幕,所以把畫布的實際像素尺寸乘上裝置像素密度,
+    // 場景那邊再用 camera zoom 把邏輯座標(還是 0-960 x 0-540)放大回來對應,
+    // 這樣座標/佈局資料完全不用改,只有畫面變清晰。
+    const dpr = window.devicePixelRatio || 1;
     window.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: 'game-canvas-container',
-      width: 960,
-      height: 540,
+      width: 960 * dpr,
+      height: 540 * dpr,
       scale: {
         mode: Phaser.Scale.FIT,
         autoCenter: Phaser.Scale.CENTER_BOTH
