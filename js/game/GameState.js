@@ -11,7 +11,11 @@ function createStationState(def) {
   if (def.type === 'ingredient_source') {
     return { type: 'ingredient_source', itemType: def.itemType };
   } else if (def.type === 'cooking') {
-    return { type: 'cooking', recipeId: def.recipeId, status: 'idle', progress: 0, doneElapsed: 0, itemHeld: null };
+    // recipeId 有填代表舊版單一食譜的鍋具(例如油炸鍋固定只煮薯條);
+    // 沒填代表新版通用平底鍋,煮什麼由放上去的生食(cookingItem)臨時決定。
+    return { type: 'cooking', recipeId: def.recipeId || null, cookingItem: null, status: 'idle', progress: 0, doneElapsed: 0, itemHeld: null };
+  } else if (def.type === 'cutting') {
+    return { type: 'cutting', cuttingItem: null, status: 'idle', progress: 0, itemHeld: null };
   } else if (def.type === 'plate_stack') {
     return { type: 'plate_stack' };
   } else if (def.type === 'dispenser') {
@@ -36,12 +40,13 @@ function createInitialStations() {
   return stations;
 }
 
-function createInitialState() {
+function createInitialState(level) {
   return {
     timeRemaining: LEVEL_DURATION_MS,
     score: 0,
     ended: false,
     spawnTimer: 0,
+    recipeIds: getLevelRecipeIds(level || 1),
     players: {
       host: { carrying: null },
       joiner: { carrying: null }

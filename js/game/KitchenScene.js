@@ -32,22 +32,27 @@ const DEFAULT_STATION_LAYOUT = {
 
 const LEVEL_COUNT = 8;
 
-// 1-1 已經用編輯模式設計過:料理站集中在左上、額外加了 5 張桌子(都在左側廚房區,故意這樣設計)。
+// 1-1:漢堡關卡。左側(host/廚房)放 6 個材料箱 + 通用平底鍋 + 鉆板 + 取盤 + 垃圾桶,
+// 右側(joiner/外場)放 6 張顧客桌位,中間靠出餐口交接。
 const LEVEL_1_LAYOUT = {
-  ingredient_potato: { x: 124, y: 46, type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', label: '材料箱', size: 72 },
-  fryer_1: { x: 268, y: 49, type: 'cooking', recipeId: 'fries', emoji: '🍳', label: '油炸鍋', size: 72 },
-  plate_stack: { x: 196, y: 47, type: 'plate_stack', emoji: '🍽️', label: '取盤', size: 72 },
-  trash_bin: { x: 412, y: 50, type: 'trash', emoji: '🗑️', label: '垃圾桶', size: 72 },
-  workbench_1: { x: 340, y: 50, type: 'workbench', emoji: '', label: '工作台', size: 72 },
+  src_beef: { x: 70, y: 90, type: 'ingredient_source', itemType: 'beef_raw', label: '生牛肉', size: 64 },
+  src_chicken: { x: 150, y: 90, type: 'ingredient_source', itemType: 'chicken_raw', label: '生雞肉', size: 64 },
+  src_tomato: { x: 230, y: 90, type: 'ingredient_source', itemType: 'tomato_raw', label: '番茄', size: 64 },
+  src_lettuce: { x: 310, y: 90, type: 'ingredient_source', itemType: 'lettuce', label: '生菜', size: 64 },
+  src_cheese: { x: 390, y: 90, type: 'ingredient_source', itemType: 'cheese', label: '起士', size: 64 },
+  src_bun: { x: 70, y: 220, type: 'ingredient_source', itemType: 'bun', label: '漢堡', size: 64 },
+  pan_1: { x: 160, y: 220, type: 'cooking', img: 'equip_pan', label: '平底鍋', size: 72 },
+  cutting_board_1: { x: 260, y: 220, type: 'cutting', img: 'equip_cutting_board', label: '鉆板', size: 72 },
+  plate_stack: { x: 350, y: 220, type: 'plate_stack', img: 'equip_plate', label: '取盤', size: 64 },
+  trash_bin: { x: 250, y: 340, type: 'trash', emoji: '🗑️', label: '垃圾桶', size: 64 },
   pass_window: { x: 480, y: 300, type: 'pass_window', emoji: '🛎️', label: '出餐口', size: 72 },
-  drink_dispenser: { x: 850, y: 150, type: 'dispenser', recipeId: 'drink', emoji: '🥤', label: '飲料機', size: 72 },
-  table_1: { x: 410, y: 122, type: 'table', customerEmoji: '🐼', label: '桌位1', size: 72 },
-  table_2: { x: 850, y: 420, type: 'table', customerEmoji: '🐧', label: '桌位2', size: 72 },
-  new_table_1: { x: 265, y: 483, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
-  new_table_2: { x: 337, y: 482, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
-  new_table_3: { x: 410, y: 194, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
-  new_table_4: { x: 409, y: 482, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 },
-  new_table_5: { x: 193, y: 482, type: 'table', customerEmoji: '🐼', shortLabel: '桌子', size: 72 }
+
+  table_1: { x: 610, y: 100, type: 'table', customerEmoji: '🐼', label: '桌位1', size: 72 },
+  table_2: { x: 850, y: 100, type: 'table', customerEmoji: '🐧', label: '桌位2', size: 72 },
+  table_3: { x: 610, y: 270, type: 'table', customerEmoji: '🐰', label: '桌位3', size: 72 },
+  table_4: { x: 850, y: 270, type: 'table', customerEmoji: '🐨', label: '桌位4', size: 72 },
+  table_5: { x: 610, y: 440, type: 'table', customerEmoji: '🐷', label: '桌位5', size: 72 },
+  table_6: { x: 850, y: 440, type: 'table', customerEmoji: '🦊', label: '桌位6', size: 72 }
 };
 
 // 8 關各自一份佈局資料。1-1 用上面設計好的版本,其餘還沒客製化的關卡先複製預設樣板當起點。
@@ -101,9 +106,17 @@ const FACING_CHANGE_THRESHOLD = 0.4; // px/frame,超過這個位移量才判斷�
 
 // 編輯模式底下「新增物件」的可選類型清單
 const STATION_TYPE_PALETTE = [
-  { type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', shortLabel: '材料箱' },
-  { type: 'cooking', recipeId: 'fries', emoji: '🍳', shortLabel: '油炸鍋' },
-  { type: 'plate_stack', emoji: '🍽️', shortLabel: '取盤' },
+  { type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', shortLabel: '材料箱(馬鈴薯)' },
+  { type: 'ingredient_source', itemType: 'beef_raw', shortLabel: '材料箱(生牛肉)' },
+  { type: 'ingredient_source', itemType: 'chicken_raw', shortLabel: '材料箱(生雞肉)' },
+  { type: 'ingredient_source', itemType: 'tomato_raw', shortLabel: '材料箱(番茄)' },
+  { type: 'ingredient_source', itemType: 'lettuce', shortLabel: '材料箱(生菜)' },
+  { type: 'ingredient_source', itemType: 'cheese', shortLabel: '材料箱(起士)' },
+  { type: 'ingredient_source', itemType: 'bun', shortLabel: '材料箱(漢堡)' },
+  { type: 'cooking', recipeId: 'fries', emoji: '🍳', shortLabel: '油炸鍋(薯條專用)' },
+  { type: 'cooking', img: 'equip_pan', shortLabel: '平底鍋(通用)' },
+  { type: 'cutting', img: 'equip_cutting_board', shortLabel: '鉆板' },
+  { type: 'plate_stack', img: 'equip_plate', shortLabel: '取盤' },
   { type: 'trash', emoji: '🗑️', shortLabel: '垃圾桶' },
   { type: 'workbench', emoji: '', shortLabel: '工作台' },
   { type: 'pass_window', emoji: '🛎️', shortLabel: '出餐口' },
@@ -114,7 +127,8 @@ const STATION_TYPE_PALETTE = [
 // 編輯模式「調整大小」下拉選單用的種類名稱對照。
 const TYPE_LABELS = {
   ingredient_source: '材料箱',
-  cooking: '油炸鍋',
+  cooking: '鍋具',
+  cutting: '鉆板',
   plate_stack: '取盤',
   trash: '垃圾桶',
   workbench: '工作台',
@@ -130,8 +144,9 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.2';
+    const v = '?v=2.3';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
+    this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
     this.load.image('p1_left', 'assets/sprites/p1_left.png' + v);
     this.load.image('p1_right', 'assets/sprites/p1_right.png' + v);
@@ -139,6 +154,30 @@ class KitchenScene extends Phaser.Scene {
     this.load.image('p2_left', 'assets/sprites/p2_left.png' + v);
     this.load.image('p2_right', 'assets/sprites/p2_right.png' + v);
     this.load.image('p2_idle', 'assets/sprites/p2_idle.png' + v);
+
+    // 廚具(圖片本身就含有檯面,直接當整個方塊顯示,不用另外疊色塊底)
+    this.load.image('equip_pan', 'assets/sprites/pan.png' + v);
+    this.load.image('equip_cutting_board', 'assets/sprites/cutting_board.png' + v);
+    this.load.image('equip_plate', 'assets/sprites/plate.png' + v);
+
+    // 食材/成品圖(用在材料箱圖示、手上拿著的東西、站點上放的東西)
+    this.load.image('item_beef_raw', 'assets/sprites/beef_raw.png' + v);
+    this.load.image('item_chicken_raw', 'assets/sprites/level1/chicken_raw.png' + v);
+    this.load.image('item_beef_cooked', 'assets/sprites/level1/beef_cooked.png' + v);
+    this.load.image('item_chicken_cooked', 'assets/sprites/level1/chicken_cooked.png' + v);
+    this.load.image('item_beef_burnt', 'assets/sprites/level1/beef_burnt.png' + v);
+    this.load.image('item_chicken_burnt', 'assets/sprites/level1/chicken_burnt.png' + v);
+    this.load.image('item_tomato_raw', 'assets/sprites/level1/tomato_raw.png' + v);
+    this.load.image('item_tomato_sliced', 'assets/sprites/level1/tomato_sliced.png' + v);
+    this.load.image('item_lettuce', 'assets/sprites/level1/lettuce.png' + v);
+    this.load.image('item_cheese', 'assets/sprites/level1/cheese.png' + v);
+    this.load.image('item_bun', 'assets/sprites/level1/bun.png' + v);
+    this.load.image('item_burger_beef_cheese', 'assets/sprites/level1/burger_beef_cheese.png' + v);
+    this.load.image('item_burger_beef', 'assets/sprites/level1/burger_beef.png' + v);
+    this.load.image('item_burger_beef_tomato', 'assets/sprites/level1/burger_beef_tomato.png' + v);
+    this.load.image('item_burger_chicken_cheese', 'assets/sprites/level1/burger_chicken_cheese.png' + v);
+    this.load.image('item_burger_chicken', 'assets/sprites/level1/burger_chicken.png' + v);
+    this.load.image('item_burger_chicken_tomato', 'assets/sprites/level1/burger_chicken_tomato.png' + v);
   }
 
   create() {
@@ -161,7 +200,7 @@ class KitchenScene extends Phaser.Scene {
     this.level = Phaser.Math.Clamp(window.SELECTED_LEVEL || 1, 1, LEVEL_COUNT);
 
     loadLevelLayout(this.level);
-    this.state = this.isHost ? createInitialState() : null;
+    this.state = this.isHost ? createInitialState(this.level) : null;
 
     this.drawBackground();
     this.createStations();
@@ -217,7 +256,7 @@ class KitchenScene extends Phaser.Scene {
     if (this.isHost) {
       playAgainBtn.textContent = '再玩一次';
       playAgainBtn.onclick = () => {
-        this.state = createInitialState();
+        this.state = createInitialState(this.level);
       };
     } else {
       // 只有 Host 能重開一局(它是遊戲狀態的權威端),Joiner 端顯示等待訊息即可,
@@ -246,37 +285,58 @@ class KitchenScene extends Phaser.Scene {
   }
 
   // 所有站點都用方形(不再用圓形),不顯示名稱文字。
+  // def.img(廚具自己的圖,例如平底鍋/鉆板/取盤):圖片本身已經含有檯面,直接整塊顯示,不疊色塊底。
+  // 其餘(材料箱、垃圾桶、出餐口...):維持色塊底 + 圖示(itemType 對應到圖片就用圖片,不然用 emoji)。
   createEquipmentView(def) {
     const container = this.add.container(def.x, def.y);
     const size = def.size || 64;
 
-    const bg = this.add.rectangle(0, 0, size, size, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
-    const icon = def.emoji ? this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5) : null;
+    const ownArtKey = def.img || null;
+    const iconImgKey = !ownArtKey && def.itemType ? itemImageKey(def.itemType) : null;
+
+    let bg = null;
+    let ownArt = null;
+    let icon = null;
+    if (ownArtKey) {
+      ownArt = this.add.image(0, 0, ownArtKey).setDisplaySize(size, size);
+    } else {
+      bg = this.add.rectangle(0, 0, size, size, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
+      if (iconImgKey) {
+        icon = this.add.image(0, -2, iconImgKey).setDisplaySize(size * 0.6, size * 0.6);
+      } else if (def.emoji) {
+        icon = this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5);
+      }
+    }
+
     const progressBg = this.add.rectangle(0, 42, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
     const progressBar = this.add.rectangle(-26, 42, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
     const heldItemText = this.add.text(0, -34, '', { fontSize: '22px' }).setOrigin(0.5);
+    const heldItemImage = this.add.image(0, -34, iconImgKey || 'equip_plate').setDisplaySize(30, 30).setVisible(false);
 
-    const parts = [bg, progressBg, progressBar, heldItemText];
+    const parts = [progressBg, progressBar, heldItemText, heldItemImage];
+    if (ownArt) parts.unshift(ownArt);
+    if (bg) parts.unshift(bg);
     if (icon) parts.push(icon);
     container.add(parts);
 
-    return { container, bg, progressBg, progressBar, heldItemText, def };
+    return { container, bg: bg || ownArt, hasOwnArt: !!ownArt, progressBg, progressBar, heldItemText, heldItemImage, def };
   }
 
   // 桌子用實際的木紋桌面圖片,食物/飲料會實際「擺在桌面上」而不是用文字泡泡飄在空中。
   createTableView(def) {
     const container = this.add.container(def.x, def.y);
 
-    const tableTop = this.add.image(0, 0, 'table_wood').setDisplaySize(def.size || 68, def.size || 68);
+    const tableTop = this.add.image(0, 0, 'table_chair').setDisplaySize(def.size || 68, def.size || 68);
     const customerText = this.add.text(0, -46, '', { fontSize: '26px' }).setOrigin(0.5);
     const plate = this.add.rectangle(0, 6, 36, 36, 0xf5ead9).setStrokeStyle(2, 0xcbbfa8).setVisible(false);
     const foodText = this.add.text(0, 6, '', { fontSize: '22px' }).setOrigin(0.5);
+    const foodImage = this.add.image(0, 6, 'equip_plate').setDisplaySize(34, 34).setVisible(false);
     const progressBg = this.add.rectangle(0, 46, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
     const progressBar = this.add.rectangle(-26, 46, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
 
-    container.add([tableTop, plate, foodText, progressBg, progressBar, customerText]);
+    container.add([tableTop, plate, foodText, foodImage, progressBg, progressBar, customerText]);
 
-    return { container, bg: tableTop, progressBg, progressBar, customerText, plate, foodText, def, isTable: true };
+    return { container, bg: tableTop, progressBg, progressBar, customerText, plate, foodText, foodImage, def, isTable: true, hasOwnArt: true };
   }
 
   createPlayers() {
@@ -286,18 +346,20 @@ class KitchenScene extends Phaser.Scene {
       const container = this.add.container(spawn.x, spawn.y);
       const image = this.add.image(0, 0, PLAYER_TEXTURES[role].idle).setDisplaySize(64, 64);
       const carryText = this.add.text(0, -40, '', { fontSize: '20px' }).setOrigin(0.5);
+      const carryImage = this.add.image(0, -40, 'equip_plate').setDisplaySize(30, 30).setVisible(false);
       const roleLabel = this.add.text(0, 34, role === 'host' ? 'P1' : 'P2', {
         fontSize: '11px',
         color: '#ffffff',
         fontStyle: 'bold',
         backgroundColor: '#00000080'
       }).setOrigin(0.5);
-      container.add([image, roleLabel, carryText]);
+      container.add([image, roleLabel, carryText, carryImage]);
 
       this.playerSprites[role] = {
         container,
         image,
         carryText,
+        carryImage,
         facing: 'idle',
         lastX: spawn.x,
         x: spawn.x,
@@ -575,7 +637,7 @@ class KitchenScene extends Phaser.Scene {
 
   applyStationSize(id, size) {
     const view = this.stationSprites[id];
-    if (view.isTable) {
+    if (view.isTable || view.hasOwnArt) {
       view.bg.setDisplaySize(size, size);
     } else {
       view.bg.setSize(size, size);
@@ -777,12 +839,45 @@ class KitchenScene extends Phaser.Scene {
     return best;
   }
 
+  // 手上/站點上「拿著的東西」統一渲染規則:
+  // 空的 -> 都藏起來;拿著組合中的盤子(物件,還沒湊滿食譜)-> 顯示盤子圖 + 目前湊了幾樣的數字;
+  // 拿著單一物品(字串)-> 有對應圖片就顯示圖片,沒有就退回 emoji 文字。
+  setItemVisual(imageObj, textObj, value) {
+    if (!value) {
+      imageObj.setVisible(false);
+      textObj.setText('');
+      return;
+    }
+    if (typeof value === 'object' && value.isPlate) {
+      imageObj.setTexture('equip_plate').setVisible(true);
+      textObj.setText(value.items.length > 0 ? String(value.items.length) : '');
+      return;
+    }
+    const key = itemImageKey(value);
+    if (key) {
+      imageObj.setTexture(key).setVisible(true);
+      textObj.setText('');
+    } else {
+      imageObj.setVisible(false);
+      textObj.setText(itemEmoji(value));
+    }
+  }
+
+  // 部分廚具(平底鍋/鉆板)用的是自帶檯面的圖片(Image),沒有色塊外框(Rectangle)可以變色,
+  // 這種情況就跳過邊框變色,只靠進度條/圖示表示狀態。
+  setStationBorder(view, color) {
+    if (view.bg && typeof view.bg.setStrokeStyle === 'function') {
+      view.bg.setStrokeStyle(3, color);
+    }
+  }
+
   renderState() {
     const state = this.state;
 
     for (const role of ['host', 'joiner']) {
       const carrying = state.players[role].carrying;
-      this.playerSprites[role].carryText.setText(carrying ? itemEmoji(carrying) : '');
+      const sprite = this.playerSprites[role];
+      this.setItemVisual(sprite.carryImage, sprite.carryText, carrying);
     }
 
     for (const id in this.stationSprites) {
@@ -791,39 +886,52 @@ class KitchenScene extends Phaser.Scene {
       if (!st) continue;
 
       if (st.type === 'cooking') {
-        const recipe = getRecipe(st.recipeId);
+        const cookDef = st.recipeId ? getRecipe(st.recipeId) : COOK_RECIPES[st.cookingItem];
         if (st.status === 'cooking') {
           view.progressBg.setVisible(true);
           view.progressBar.setVisible(true);
-          view.progressBar.width = 52 * Phaser.Math.Clamp(st.progress / recipe.cookTimeMs, 0, 1);
+          view.progressBar.width = 52 * Phaser.Math.Clamp(st.progress / (cookDef ? cookDef.cookTimeMs : 1), 0, 1);
           view.progressBar.fillColor = 0xffcf8f;
-          view.heldItemText.setText('');
-          view.bg.setStrokeStyle(3, 0xffcf8f);
+          this.setItemVisual(view.heldItemImage, view.heldItemText, null);
+          this.setStationBorder(view, 0xffcf8f);
         } else if (st.status === 'done') {
           view.progressBg.setVisible(false);
           view.progressBar.setVisible(false);
-          view.heldItemText.setText(itemEmoji(st.itemHeld));
-          view.bg.setStrokeStyle(3, 0x6fe86f);
+          this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
+          this.setStationBorder(view, 0x6fe86f);
         } else if (st.status === 'burnt') {
           view.progressBg.setVisible(false);
           view.progressBar.setVisible(false);
-          view.heldItemText.setText('💨');
-          view.bg.setStrokeStyle(3, 0xff6b6b);
+          this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld || 'trash');
+          this.setStationBorder(view, 0xff6b6b);
         } else {
           view.progressBg.setVisible(false);
           view.progressBar.setVisible(false);
-          view.heldItemText.setText('');
-          view.bg.setStrokeStyle(3, 0xf5ead9);
+          this.setItemVisual(view.heldItemImage, view.heldItemText, null);
+          this.setStationBorder(view, 0xf5ead9);
+        }
+      } else if (st.type === 'cutting') {
+        const cutDef = CUT_RECIPES[st.cuttingItem];
+        if (st.status === 'cutting') {
+          view.progressBg.setVisible(true);
+          view.progressBar.setVisible(true);
+          view.progressBar.width = 52 * Phaser.Math.Clamp(st.progress / (cutDef ? cutDef.cutTimeMs : 1), 0, 1);
+          view.progressBar.fillColor = 0x8fd1ff;
+          this.setItemVisual(view.heldItemImage, view.heldItemText, null);
+        } else {
+          view.progressBg.setVisible(false);
+          view.progressBar.setVisible(false);
+          this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
         }
       } else if (st.type === 'pass_window' || st.type === 'workbench') {
-        view.heldItemText.setText(st.itemHeld ? itemEmoji(st.itemHeld) : '');
+        this.setItemVisual(view.heldItemImage, view.heldItemText, st.itemHeld);
       } else if (st.type === 'table') {
         // 編輯模式下不管實際 state 內容為何,一律當成空桌顯示,絕對不會出現顧客。
         if (st.occupied && !this.editMode) {
           const recipe = getRecipe(st.recipeId);
           view.customerText.setText(view.def.customerEmoji || '🐼');
           view.plate.setVisible(true);
-          view.foodText.setText(itemEmoji(recipe.platedItem));
+          this.setItemVisual(view.foodImage, view.foodText, recipe.platedItem);
           const ratio = Phaser.Math.Clamp(st.patience / st.maxPatience, 0, 1);
           view.progressBg.setVisible(true);
           view.progressBar.setVisible(true);
@@ -832,7 +940,7 @@ class KitchenScene extends Phaser.Scene {
         } else {
           view.customerText.setText('');
           view.plate.setVisible(false);
-          view.foodText.setText('');
+          this.setItemVisual(view.foodImage, view.foodText, null);
           view.progressBg.setVisible(false);
           view.progressBar.setVisible(false);
         }

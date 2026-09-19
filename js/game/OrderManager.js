@@ -29,7 +29,8 @@ function trySpawnOrder(state) {
   if (emptyTableIds.length === 0) return;
 
   const tableId = emptyTableIds[Math.floor(Math.random() * emptyTableIds.length)];
-  const recipe = RECIPE_LIST[Math.floor(Math.random() * RECIPE_LIST.length)];
+  const ids = state.recipeIds && state.recipeIds.length ? state.recipeIds : RECIPE_LIST.map((r) => r.id);
+  const recipe = getRecipe(ids[Math.floor(Math.random() * ids.length)]);
   const table = state.stations[tableId];
   table.occupied = true;
   table.recipeId = recipe.id;
