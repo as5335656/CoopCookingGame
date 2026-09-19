@@ -41,7 +41,7 @@ class KitchenScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('kitchen_bg', 'assets/sprites/kitchen_bg.png');
+    this.load.image('table_wood', 'assets/sprites/table.png');
   }
 
   create() {
@@ -109,11 +109,11 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
-  // 背景暫時直接用參考截圖裁出來的畫面(使用者自己的圖),之後會換成正式美術。
-  // 因為背景圖裡本來就畫了它自己的物件跟角色,位置不會跟我們自己畫的站點/玩家完全對齊,
-  // 純粹先求「看起來像」,等真的 PNG 素材來了就會整個換掉。
   drawBackground() {
-    this.add.image(WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setDepth(-2);
+    this.add.rectangle(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, 0x5c8f7a).setDepth(-2);
+    this.add.rectangle(240, WORLD_H / 2 + 20, 480, WORLD_H - 40, 0xd9b98a).setDepth(-1); // 左:廚房地板
+    this.add.rectangle(720, WORLD_H / 2 + 20, 480, WORLD_H - 40, 0xf0c98f).setDepth(-1); // 右:外場地板
+    this.add.rectangle(480, WORLD_H / 2 + 20, 40, WORLD_H - 40, 0x8a6d4a).setDepth(-1); // 中間走道分隔
   }
 
   createStations() {
@@ -128,32 +128,28 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
+  // 所有站點都用方形(不再用圓形),不顯示名稱文字。
   createEquipmentView(def) {
     const container = this.add.container(def.x, def.y);
 
-    // 工作台目前還沒有 PNG,先用方形邊框佔位(之後直接換圖不影響邏輯)
-    const bg =
-      def.type === 'workbench'
-        ? this.add.rectangle(0, 0, 64, 64, 0x8a7256).setStrokeStyle(3, 0xf5ead9)
-        : this.add.circle(0, 0, 34, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
+    const bg = this.add.rectangle(0, 0, 64, 64, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
     const icon = def.emoji ? this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5) : null;
-    const label = this.add.text(0, 40, def.label, { fontSize: '11px', color: '#3a2c20', fontStyle: 'bold' }).setOrigin(0.5);
-    const progressBg = this.add.rectangle(0, 52, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
-    const progressBar = this.add.rectangle(-26, 52, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
+    const progressBg = this.add.rectangle(0, 42, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
+    const progressBar = this.add.rectangle(-26, 42, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
     const heldItemText = this.add.text(0, -34, '', { fontSize: '22px' }).setOrigin(0.5);
 
-    const parts = [bg, label, progressBg, progressBar, heldItemText];
+    const parts = [bg, progressBg, progressBar, heldItemText];
     if (icon) parts.push(icon);
     container.add(parts);
 
     return { container, bg, progressBg, progressBar, heldItemText, def };
   }
 
-  // 桌子做成方形(跟廚具機台的圓形區分開來),食物/飲料會實際「擺在桌面上」而不是用文字泡泡飄在空中。
+  // 桌子用實際的木紋桌面圖片,食物/飲料會實際「擺在桌面上」而不是用文字泡泡飄在空中。
   createTableView(def) {
     const container = this.add.container(def.x, def.y);
 
-    const tableTop = this.add.rectangle(0, 0, 68, 68, 0xb5824a).setStrokeStyle(3, 0x6e4f2e);
+    const tableTop = this.add.image(0, 0, 'table_wood').setDisplaySize(68, 68);
     const customerText = this.add.text(0, -46, '', { fontSize: '26px' }).setOrigin(0.5);
     const plate = this.add.circle(0, 6, 20, 0xf5ead9).setStrokeStyle(2, 0xcbbfa8).setVisible(false);
     const foodText = this.add.text(0, 6, '', { fontSize: '22px' }).setOrigin(0.5);
