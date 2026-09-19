@@ -147,7 +147,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.6';
+    const v = '?v=2.7';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -300,9 +300,18 @@ class KitchenScene extends Phaser.Scene {
     const bg = this.add.image(0, 0, 'table_wood').setDisplaySize(size, size);
     const outline = this.add.rectangle(0, 0, size, size, 0x000000, 0).setStrokeStyle(3, 0xf5ead9);
 
+    // 廚具本身的東西(拿著/煮著/切著的食材)要疊在「鍋面/檯面」中心,不是飄在廚具圖上方——
+    // 平底鍋圖右側有一截握把,實際鍋面中心比整張圖的正中央略偏左,所以額外往左修正一點。
     let icon = null;
+    let itemAnchorX = 0;
+    let itemAnchorY = -2;
     if (ownArtKey) {
-      icon = this.add.image(0, -2, ownArtKey).setDisplaySize(size * 0.8, size * 0.8);
+      const src = this.textures.get(ownArtKey).getSourceImage();
+      const displayW = size * 0.8;
+      const displayH = displayW * (src.height / src.width);
+      icon = this.add.image(0, -2, ownArtKey).setDisplaySize(displayW, displayH);
+      itemAnchorX = ownArtKey === 'equip_pan' ? -displayW * 0.14 : 0;
+      itemAnchorY = -2;
     } else if (iconImgKey) {
       icon = this.add.image(0, -2, iconImgKey).setDisplaySize(size * 0.6, size * 0.6);
     } else if (def.emoji) {
@@ -311,8 +320,10 @@ class KitchenScene extends Phaser.Scene {
 
     const progressBg = this.add.rectangle(0, 42, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
     const progressBar = this.add.rectangle(-26, 42, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
-    const heldItemText = this.add.text(0, -34, '', { fontSize: '22px' }).setOrigin(0.5);
-    const heldItemImage = this.add.image(0, -34, iconImgKey || 'equip_plate').setDisplaySize(30, 30).setVisible(false);
+    const heldItemText = this.add.text(itemAnchorX, itemAnchorY, '', { fontSize: '22px' }).setOrigin(0.5);
+    const heldItemImage = this.add.image(itemAnchorX, itemAnchorY, iconImgKey || 'equip_plate')
+      .setDisplaySize(ownArtKey ? size * 0.42 : 30, ownArtKey ? size * 0.42 : 30)
+      .setVisible(false);
 
     // 盤子疊放用:最多視覺上疊 4 層(每層往上偏移一點),超過 4 個就在最上面顯示總數字。
     const plateStackImages = [];
@@ -321,8 +332,11 @@ class KitchenScene extends Phaser.Scene {
     }
     const plateStackCountText = this.add.text(14, -46, '', { fontSize: '13px', color: '#ffffff', fontStyle: 'bold', backgroundColor: '#00000080' }).setOrigin(0.5).setVisible(false);
 
-    const parts = [bg, outline, progressBg, progressBar, heldItemText, heldItemImage, ...plateStackImages, plateStackCountText];
+    // icon(廚具/材料箱圖示)要先疊上去,heldItemImage(鍋子裡煮的東西)才會蓋在它上面看得到,
+    // 不然像平底鍋這種食材要疊在圖示中央的情況,廚具圖示會蓋住食材。
+    const parts = [bg, outline];
     if (icon) parts.push(icon);
+    parts.push(progressBg, progressBar, heldItemText, heldItemImage, ...plateStackImages, plateStackCountText);
     container.add(parts);
 
     return { container, bg, outline, hasOwnArt: !!ownArtKey, progressBg, progressBar, heldItemText, heldItemImage, plateStackImages, plateStackCountText, def };
