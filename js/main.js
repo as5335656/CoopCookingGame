@@ -1,5 +1,13 @@
 // 畫面狀態機:主選單 -> 配對畫面 -> 遊戲畫面
 
+// 舊版 Safari 不支援 100dvh,退而求其次用捲動觸發網址列自動收合。
+window.addEventListener('load', () => {
+  setTimeout(() => window.scrollTo(0, 1), 50);
+});
+window.addEventListener('orientationchange', () => {
+  setTimeout(() => window.scrollTo(0, 1), 50);
+});
+
 (function () {
   const screens = {
     menu: document.getElementById('screen-menu'),
