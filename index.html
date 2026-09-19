@@ -24,8 +24,12 @@
     <button id="btn-local-test" class="btn btn-secondary">本機測試(一人操作雙角色)</button>
   </div>
 
+  <div class="panel">
+    <button id="btn-edit-layout" class="btn btn-secondary">編輯佈局(拖拉調整位置)</button>
+  </div>
+
   <p id="menu-error" class="error-text"></p>
-  <div id="version-label">V1.2</div>
+  <div id="version-label">V1.4</div>
 </div>
 
 <div id="screen-pairing" class="screen">
@@ -64,6 +68,14 @@
     <h2>時間到!</h2>
     <p id="result-score"></p>
     <button id="btn-play-again" class="btn btn-primary">再玩一次</button>
+  </div>
+
+  <div id="edit-panel" class="hidden">
+    <p class="hint">拖拉場景裡的物件調整位置。點下方按鈕可以新增物件。</p>
+    <div id="edit-palette"></div>
+    <button id="btn-copy-layout" class="btn btn-primary">複製佈局</button>
+    <textarea id="edit-output" readonly></textarea>
+    <button id="btn-exit-edit" class="btn btn-secondary">離開編輯</button>
   </div>
 </div>
 

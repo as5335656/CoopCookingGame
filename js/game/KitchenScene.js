@@ -35,6 +35,18 @@ const PLAYER_SPAWN = {
 const PLAYER_EMOJI = { host: '🐱', joiner: '🦊' };
 const PLAYER_COLOR = { host: 0x4a90d9, joiner: 0xd97a4a };
 
+// 編輯模式底下「新增物件」的可選類型清單
+const STATION_TYPE_PALETTE = [
+  { type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', shortLabel: '材料箱' },
+  { type: 'cooking', recipeId: 'fries', emoji: '🍳', shortLabel: '油炸鍋' },
+  { type: 'plate_stack', emoji: '🍽️', shortLabel: '取盤' },
+  { type: 'trash', emoji: '🗑️', shortLabel: '垃圾桶' },
+  { type: 'workbench', emoji: '', shortLabel: '工作台' },
+  { type: 'pass_window', emoji: '🛎️', shortLabel: '出餐口' },
+  { type: 'dispenser', recipeId: 'drink', emoji: '🥤', shortLabel: '飲料機' },
+  { type: 'table', customerEmoji: '🐼', shortLabel: '桌子' }
+];
+
 class KitchenScene extends Phaser.Scene {
   constructor() {
     super('KitchenScene');
@@ -49,6 +61,7 @@ class KitchenScene extends Phaser.Scene {
     this.isHost = this.role === 'host';
     this.remoteRole = this.isHost ? 'joiner' : 'host';
     this.localTestMode = !!window.LOCAL_TEST_MODE;
+    this.editMode = !!window.EDIT_MODE;
 
     this.state = this.isHost ? createInitialState() : null;
 
@@ -58,6 +71,7 @@ class KitchenScene extends Phaser.Scene {
 
     this.localPos = { x: PLAYER_SPAWN[this.role].x, y: PLAYER_SPAWN[this.role].y };
     this.moveTarget = null;
+    this.pendingInteractStationId = null;
 
     if (this.localTestMode) {
       // 本機測試模式:一個人同時操作兩個角色,不走網路,直接在同一份 state 上互動。
@@ -70,7 +84,11 @@ class KitchenScene extends Phaser.Scene {
       document.getElementById('btn-interact').style.display = 'none';
     }
 
-    this.setupTapToMove();
+    if (this.editMode) {
+      this.enableEditMode();
+    } else {
+      this.setupTapToMove();
+    }
 
     if (!this.localTestMode) {
       GameSync.onRemoteMove = (x, y) => {
@@ -151,7 +169,7 @@ class KitchenScene extends Phaser.Scene {
 
     const tableTop = this.add.image(0, 0, 'table_wood').setDisplaySize(68, 68);
     const customerText = this.add.text(0, -46, '', { fontSize: '26px' }).setOrigin(0.5);
-    const plate = this.add.circle(0, 6, 20, 0xf5ead9).setStrokeStyle(2, 0xcbbfa8).setVisible(false);
+    const plate = this.add.rectangle(0, 6, 36, 36, 0xf5ead9).setStrokeStyle(2, 0xcbbfa8).setVisible(false);
     const foodText = this.add.text(0, 6, '', { fontSize: '22px' }).setOrigin(0.5);
     const progressBg = this.add.rectangle(0, 46, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
     const progressBar = this.add.rectangle(-26, 46, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
@@ -166,7 +184,7 @@ class KitchenScene extends Phaser.Scene {
     for (const role of ['host', 'joiner']) {
       const spawn = PLAYER_SPAWN[role];
       const container = this.add.container(spawn.x, spawn.y);
-      const body = this.add.circle(0, 0, 22, PLAYER_COLOR[role]);
+      const body = this.add.rectangle(0, 0, 44, 44, PLAYER_COLOR[role]).setStrokeStyle(3, 0xffffff);
       const face = this.add.text(0, 0, PLAYER_EMOJI[role], { fontSize: '24px' }).setOrigin(0.5);
       const carryText = this.add.text(0, -36, '', { fontSize: '20px' }).setOrigin(0.5);
       const roleLabel = this.add.text(0, 30, role === 'host' ? 'P1' : 'P2', {
@@ -209,9 +227,8 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
-  // 點擊場景地板移動,取代搖桿。點到的位置會先被鎖在自己那一側的可移動範圍內
-  // (中間走道兩邊都不能穿越),再設成移動目標。
-  // 本機測試模式下,點左半邊操控 P1、點右半邊操控 P2,且點到站點範圍內會走過去後自動互動。
+  // 點擊物件才會移動(點空地沒有反應),走過去後自動互動。
+  // 本機測試模式下,點左半邊操控 P1、點右半邊操控 P2。
   setupTapToMove() {
     this.input.on('pointerdown', (pointer) => {
       if (this.localTestMode) {
@@ -219,19 +236,28 @@ class KitchenScene extends Phaser.Scene {
         const role = pointer.worldX < midX ? 'host' : 'joiner';
         this.handleLocalTestTap(role, pointer.worldX, pointer.worldY);
       } else {
-        const targetX = Phaser.Math.Clamp(pointer.worldX, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
-        const targetY = Phaser.Math.Clamp(pointer.worldY, 110, WORLD_H - 30);
+        const stationId = this.findNearestStation(pointer.worldX, pointer.worldY);
+        if (!stationId) return; // 點到空地不移動
+
+        const def = STATION_LAYOUT[stationId];
+        const targetX = Phaser.Math.Clamp(def.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
+        const targetY = Phaser.Math.Clamp(def.y, 110, WORLD_H - 30);
         this.moveTarget = { x: targetX, y: targetY };
+        this.pendingInteractStationId = stationId;
         this.showTapMarker(targetX, targetY);
       }
     });
   }
 
   handleLocalTestTap(role, x, y) {
-    const targetX = Phaser.Math.Clamp(x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
-    const targetY = Phaser.Math.Clamp(y, 110, WORLD_H - 30);
+    const stationId = this.findNearestStation(x, y);
+    if (!stationId) return; // 點到空地不移動
+
+    const def = STATION_LAYOUT[stationId];
+    const targetX = Phaser.Math.Clamp(def.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
+    const targetY = Phaser.Math.Clamp(def.y, 110, WORLD_H - 30);
     this.testMoveTargets[role] = { x: targetX, y: targetY };
-    this.testPendingInteract[role] = this.findNearestStation(targetX, targetY);
+    this.testPendingInteract[role] = stationId;
     this.showTapMarker(targetX, targetY);
   }
 
@@ -273,6 +299,90 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
+  // 編輯模式:拖拉既有物件調整位置、也可以新增物件,結果即時整理成可複製的佈局文字。
+  enableEditMode() {
+    document.getElementById('btn-interact').style.display = 'none';
+
+    this.editedLayout = {}; // { [id]: {x, y} },記錄被拖過的最終位置
+    this.dynamicDefs = {}; // { [id]: def },記錄編輯模式下新增的物件完整定義
+    this.nextEditId = {};
+
+    for (const id in this.stationSprites) {
+      this.makeDraggable(id, this.stationSprites[id].container);
+    }
+
+    this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
+      gameObject.x = dragX;
+      gameObject.y = dragY;
+    });
+
+    this.input.on('dragend', (pointer, gameObject) => {
+      this.editedLayout[gameObject.stationId] = {
+        x: Math.round(gameObject.x),
+        y: Math.round(gameObject.y)
+      };
+      this.updateEditOutput();
+    });
+
+    const palette = document.getElementById('edit-palette');
+    STATION_TYPE_PALETTE.forEach((tpl) => {
+      const btn = document.createElement('button');
+      btn.className = 'palette-btn';
+      btn.textContent = '+ ' + tpl.shortLabel;
+      btn.onclick = () => this.addStation(tpl);
+      palette.appendChild(btn);
+    });
+
+    document.getElementById('btn-copy-layout').onclick = () => {
+      const textarea = document.getElementById('edit-output');
+      textarea.select();
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(textarea.value).catch(() => {});
+      }
+      try {
+        document.execCommand('copy');
+      } catch (e) {
+        // 部分瀏覽器不支援,使用者仍可從 textarea 手動選取複製
+      }
+    };
+
+    document.getElementById('edit-panel').classList.remove('hidden');
+    this.updateEditOutput();
+  }
+
+  makeDraggable(id, container) {
+    container.stationId = id;
+    container.setSize(70, 70);
+    container.setInteractive();
+    this.input.setDraggable(container);
+  }
+
+  addStation(tpl) {
+    this.nextEditId[tpl.type] = (this.nextEditId[tpl.type] || 0) + 1;
+    const id = 'new_' + tpl.type + '_' + this.nextEditId[tpl.type];
+    const def = Object.assign({ x: WORLD_W / 2, y: WORLD_H / 2 }, tpl);
+    this.dynamicDefs[id] = def;
+
+    const view = def.type === 'table' ? this.createTableView(def) : this.createEquipmentView(def);
+    this.stationSprites[id] = view;
+    this.makeDraggable(id, view.container);
+
+    const stationState = createStationState(def);
+    if (stationState) this.state.stations[id] = stationState;
+
+    this.updateEditOutput();
+  }
+
+  updateEditOutput() {
+    const merged = {};
+    for (const id in this.stationSprites) {
+      const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
+      const override = this.editedLayout[id];
+      merged[id] = override ? Object.assign({}, base, { x: override.x, y: override.y }) : base;
+    }
+    document.getElementById('edit-output').value = JSON.stringify(merged, null, 2);
+  }
+
   showTapMarker(x, y) {
     const marker = this.add.circle(x, y, 10, 0xffffff, 0.6);
     this.tweens.add({
@@ -295,6 +405,16 @@ class KitchenScene extends Phaser.Scene {
         this.localPos.x = this.moveTarget.x;
         this.localPos.y = this.moveTarget.y;
         this.moveTarget = null;
+
+        if (this.pendingInteractStationId) {
+          const stationId = this.pendingInteractStationId;
+          this.pendingInteractStationId = null;
+          if (this.isHost) {
+            interactStation(this.state, stationId, 'host');
+          } else {
+            GameSync.sendInteract(stationId);
+          }
+        }
       } else {
         this.localPos.x += (dx / dist) * step;
         this.localPos.y += (dy / dist) * step;

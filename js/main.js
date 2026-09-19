@@ -92,6 +92,18 @@ window.addEventListener('orientationchange', () => {
     startGame();
   });
 
+  document.getElementById('btn-edit-layout').addEventListener('click', () => {
+    menuError.textContent = '';
+    window.NET_ROLE = 'host';
+    window.LOCAL_TEST_MODE = true;
+    window.EDIT_MODE = true;
+    startGame();
+  });
+
+  document.getElementById('btn-exit-edit').addEventListener('click', () => {
+    location.reload();
+  });
+
   let gameStarted = false;
   function startGame() {
     if (gameStarted) return;
