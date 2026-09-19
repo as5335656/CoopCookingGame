@@ -214,7 +214,7 @@ class KitchenScene extends Phaser.Scene {
       this.handleInteractInput();
     }
 
-    if (this.isHost && this.state && !this.state.ended) {
+    if (this.isHost && this.state && !this.state.ended && !this.editMode) {
       tick(this.state, delta);
       if (!this.localTestMode && time - this.lastStateSent > 150) {
         this.lastStateSent = time;
@@ -299,21 +299,27 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
-  // 編輯模式:拖拉既有物件調整位置、也可以新增物件,結果即時整理成可複製的佈局文字。
+  // 編輯模式:拖拉既有物件調整位置(不能互相重疊,撞到會卡在邊緣)、
+  // 調整選取物件的大小、新增物件,結果即時整理成可複製的佈局文字。
+  // 進編輯模式時遊戲模擬(訂單/顧客/計時)是暫停的,場景裡不會有顧客。
   enableEditMode() {
     document.getElementById('btn-interact').style.display = 'none';
 
     this.editedLayout = {}; // { [id]: {x, y} },記錄被拖過的最終位置
+    this.editedSizes = {}; // { [id]: size },記錄調整過的大小
     this.dynamicDefs = {}; // { [id]: def },記錄編輯模式下新增的物件完整定義
     this.nextEditId = {};
+    this.selectedStationId = null;
 
     for (const id in this.stationSprites) {
       this.makeDraggable(id, this.stationSprites[id].container);
     }
 
     this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-      gameObject.x = dragX;
-      gameObject.y = dragY;
+      const size = this.getStationSize(gameObject.stationId);
+      const resolved = this.resolveCollision(gameObject.stationId, dragX, dragY, size);
+      gameObject.x = resolved.x;
+      gameObject.y = resolved.y;
     });
 
     this.input.on('dragend', (pointer, gameObject) => {
@@ -332,6 +338,9 @@ class KitchenScene extends Phaser.Scene {
       btn.onclick = () => this.addStation(tpl);
       palette.appendChild(btn);
     });
+
+    document.getElementById('btn-size-minus').onclick = () => this.adjustSelectedSize(-8);
+    document.getElementById('btn-size-plus').onclick = () => this.adjustSelectedSize(8);
 
     document.getElementById('btn-copy-layout').onclick = () => {
       const textarea = document.getElementById('edit-output');
@@ -352,9 +361,63 @@ class KitchenScene extends Phaser.Scene {
 
   makeDraggable(id, container) {
     container.stationId = id;
-    container.setSize(70, 70);
+    const size = this.getStationSize(id);
+    container.setSize(size, size);
     container.setInteractive();
     this.input.setDraggable(container);
+    container.on('pointerdown', () => {
+      this.selectedStationId = id;
+      document.getElementById('size-display').textContent = this.getStationSize(id);
+    });
+  }
+
+  getStationSize(id) {
+    return this.editedSizes[id] || 64;
+  }
+
+  applyStationSize(id, size) {
+    const view = this.stationSprites[id];
+    if (view.isTable) {
+      view.bg.setDisplaySize(size, size);
+    } else {
+      view.bg.setSize(size, size);
+    }
+    view.container.setSize(size, size);
+  }
+
+  adjustSelectedSize(delta) {
+    if (!this.selectedStationId) return;
+    const id = this.selectedStationId;
+    const next = Phaser.Math.Clamp(this.getStationSize(id) + delta, 32, 140);
+    this.editedSizes[id] = next;
+    this.applyStationSize(id, next);
+    document.getElementById('size-display').textContent = next;
+    this.updateEditOutput();
+  }
+
+  // 簡單的方形碰撞:如果移動後的位置跟其他物件重疊,往重疊量較小的那個軸推開,
+  // 讓物件卡在對方邊緣,而不是直接疊上去。
+  resolveCollision(movingId, x, y, size) {
+    const halfA = size / 2;
+    for (const otherId in this.stationSprites) {
+      if (otherId === movingId) continue;
+      const other = this.stationSprites[otherId].container;
+      const halfB = this.getStationSize(otherId) / 2;
+
+      const dx = x - other.x;
+      const dy = y - other.y;
+      const overlapX = halfA + halfB - Math.abs(dx);
+      const overlapY = halfA + halfB - Math.abs(dy);
+
+      if (overlapX > 0 && overlapY > 0) {
+        if (overlapX < overlapY) {
+          x += dx >= 0 ? overlapX : -overlapX;
+        } else {
+          y += dy >= 0 ? overlapY : -overlapY;
+        }
+      }
+    }
+    return { x, y };
   }
 
   addStation(tpl) {
@@ -377,8 +440,16 @@ class KitchenScene extends Phaser.Scene {
     const merged = {};
     for (const id in this.stationSprites) {
       const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
-      const override = this.editedLayout[id];
-      merged[id] = override ? Object.assign({}, base, { x: override.x, y: override.y }) : base;
+      const posOverride = this.editedLayout[id];
+      const sizeOverride = this.editedSizes[id];
+      merged[id] = Object.assign({}, base);
+      if (posOverride) {
+        merged[id].x = posOverride.x;
+        merged[id].y = posOverride.y;
+      }
+      if (sizeOverride) {
+        merged[id].size = sizeOverride;
+      }
     }
     document.getElementById('edit-output').value = JSON.stringify(merged, null, 2);
   }
