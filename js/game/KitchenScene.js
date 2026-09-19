@@ -130,7 +130,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.1';
+    const v = '?v=2.2';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
     this.load.image('p1_left', 'assets/sprites/p1_left.png' + v);
@@ -344,7 +344,7 @@ class KitchenScene extends Phaser.Scene {
 
         const def = STATION_LAYOUT[stationId];
         const targetX = Phaser.Math.Clamp(def.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
-        const targetY = Phaser.Math.Clamp(def.y, 110, WORLD_H - 30);
+        const targetY = Phaser.Math.Clamp(def.y, 30, WORLD_H - 30);
         this.moveTarget = { x: targetX, y: targetY };
         this.pendingInteractStationId = stationId;
         this.moveStartTime = performance.now();
@@ -359,7 +359,7 @@ class KitchenScene extends Phaser.Scene {
 
     const def = STATION_LAYOUT[stationId];
     const targetX = Phaser.Math.Clamp(def.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
-    const targetY = Phaser.Math.Clamp(def.y, 110, WORLD_H - 30);
+    const targetY = Phaser.Math.Clamp(def.y, 30, WORLD_H - 30);
     this.testMoveTargets[role] = { x: targetX, y: targetY };
     this.testPendingInteract[role] = stationId;
     this.testMoveStartTime[role] = performance.now();
@@ -390,7 +390,7 @@ class KitchenScene extends Phaser.Scene {
       pos.y = resolved.y;
 
       pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
-      pos.y = Phaser.Math.Clamp(pos.y, 110, WORLD_H - 30);
+      pos.y = Phaser.Math.Clamp(pos.y, 30, WORLD_H - 30);
 
       // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
       // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
@@ -703,7 +703,7 @@ class KitchenScene extends Phaser.Scene {
     this.localPos.y = resolved.y;
 
     this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
-    this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 110, WORLD_H - 30);
+    this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 30, WORLD_H - 30);
 
     // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
     // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
