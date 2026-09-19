@@ -13,7 +13,8 @@ const ZONE_MIN_X = { host: 30, joiner: 510 };
 
 // 佈局參考截圖:廚房設備排成流理台式的 2 列(不是單排一直線),
 // 中間走道垂直分隔廚房與外場,外場桌位一上一下錯開擺放。
-const STATION_LAYOUT = {
+// 這是「預設樣板」,8 關一開始都先複製這份當起點,之後各關可以用編輯模式各自客製化。
+const DEFAULT_STATION_LAYOUT = {
   ingredient_potato: { x: 110, y: 160, type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', label: '材料箱' },
   fryer_1: { x: 230, y: 160, type: 'cooking', recipeId: 'fries', emoji: '🍳', label: '油炸鍋' },
   plate_stack: { x: 350, y: 160, type: 'plate_stack', emoji: '🍽️', label: '取盤' },
@@ -27,25 +28,42 @@ const STATION_LAYOUT = {
   table_2: { x: 850, y: 420, type: 'table', customerEmoji: '🐧', label: '桌位2' }
 };
 
-// 編輯模式存的佈局只在「這台裝置/瀏覽器」裡有效(用 localStorage),
+const LEVEL_COUNT = 8;
+
+// 8 關各自一份佈局資料,一開始都先複製同一份預設樣板。
+const LEVEL_LAYOUTS = {};
+for (let i = 1; i <= LEVEL_COUNT; i++) {
+  LEVEL_LAYOUTS[i] = JSON.parse(JSON.stringify(DEFAULT_STATION_LAYOUT));
+}
+
+// 實際場景讀取的佈局物件,內容在載入某一關時才會被填入(見 loadLevelLayout)。
+const STATION_LAYOUT = {};
+
+// 編輯模式存的佈局只在「這台裝置/瀏覽器」裡有效(用 localStorage,依關卡分開存),
 // 重新整理網頁不會不見,但不會同步給別台裝置——要讓兩支手機都看到同一份佈局,
 // 還是要把「複製佈局」的結果貼給開發者,寫進程式碼裡正式部署。
-const LAYOUT_STORAGE_KEY = 'coopCookingLayout';
+const LAYOUT_STORAGE_PREFIX = 'coopCookingLayout_level_';
 
-function loadCustomLayoutIfAny() {
+function applyLayoutData(layoutData) {
+  for (const key in STATION_LAYOUT) delete STATION_LAYOUT[key];
+  Object.assign(STATION_LAYOUT, layoutData);
+}
+
+function loadLevelLayout(levelNum) {
+  const base = LEVEL_LAYOUTS[levelNum] || LEVEL_LAYOUTS[1];
+  applyLayoutData(base);
+
   let saved;
   try {
-    saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+    saved = localStorage.getItem(LAYOUT_STORAGE_PREFIX + levelNum);
   } catch (e) {
     return; // 部分瀏覽器情境(例如無痕模式)可能無法存取 localStorage
   }
   if (!saved) return;
   try {
-    const parsed = JSON.parse(saved);
-    for (const key in STATION_LAYOUT) delete STATION_LAYOUT[key];
-    Object.assign(STATION_LAYOUT, parsed);
+    applyLayoutData(JSON.parse(saved));
   } catch (e) {
-    // 儲存內容壞掉就當作沒有,繼續用程式碼內建的預設佈局
+    // 儲存內容壞掉就當作沒有,繼續用這一關內建的預設佈局
   }
 }
 
@@ -79,14 +97,16 @@ class KitchenScene extends Phaser.Scene {
   }
 
   preload() {
-    this.load.image('table_wood', 'assets/sprites/table.png');
-    this.load.image('kitchen_bg', 'assets/sprites/background.png');
-    this.load.image('p1_left', 'assets/sprites/p1_left.png');
-    this.load.image('p1_right', 'assets/sprites/p1_right.png');
-    this.load.image('p1_idle', 'assets/sprites/p1_idle.png');
-    this.load.image('p2_left', 'assets/sprites/p2_left.png');
-    this.load.image('p2_right', 'assets/sprites/p2_right.png');
-    this.load.image('p2_idle', 'assets/sprites/p2_idle.png');
+    // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
+    const v = '?v=1.9';
+    this.load.image('table_wood', 'assets/sprites/table.png' + v);
+    this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
+    this.load.image('p1_left', 'assets/sprites/p1_left.png' + v);
+    this.load.image('p1_right', 'assets/sprites/p1_right.png' + v);
+    this.load.image('p1_idle', 'assets/sprites/p1_idle.png' + v);
+    this.load.image('p2_left', 'assets/sprites/p2_left.png' + v);
+    this.load.image('p2_right', 'assets/sprites/p2_right.png' + v);
+    this.load.image('p2_idle', 'assets/sprites/p2_idle.png' + v);
   }
 
   create() {
@@ -95,8 +115,9 @@ class KitchenScene extends Phaser.Scene {
     this.remoteRole = this.isHost ? 'joiner' : 'host';
     this.localTestMode = !!window.LOCAL_TEST_MODE;
     this.editMode = !!window.EDIT_MODE;
+    this.level = Phaser.Math.Clamp(window.SELECTED_LEVEL || 1, 1, LEVEL_COUNT);
 
-    loadCustomLayoutIfAny();
+    loadLevelLayout(this.level);
     this.state = this.isHost ? createInitialState() : null;
 
     this.drawBackground();
@@ -411,13 +432,14 @@ class KitchenScene extends Phaser.Scene {
 
     document.getElementById('btn-reset-layout').onclick = () => {
       try {
-        localStorage.removeItem(LAYOUT_STORAGE_KEY);
+        localStorage.removeItem(LAYOUT_STORAGE_PREFIX + this.level);
       } catch (e) {
         // 忽略
       }
       location.reload();
     };
 
+    document.getElementById('edit-level-label').textContent = '正在編輯:1-' + this.level;
     document.getElementById('edit-panel').classList.remove('hidden');
     this.updateEditOutput();
   }
@@ -508,7 +530,7 @@ class KitchenScene extends Phaser.Scene {
 
     // 自動存到這台裝置的瀏覽器裡,重新整理/下次進遊戲都會沿用這份佈局。
     try {
-      localStorage.setItem(LAYOUT_STORAGE_KEY, json);
+      localStorage.setItem(LAYOUT_STORAGE_PREFIX + this.level, json);
     } catch (e) {
       // localStorage 可能被封鎖,不影響複製佈局功能
     }

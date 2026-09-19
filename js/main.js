@@ -23,6 +23,22 @@ window.addEventListener('orientationchange', () => {
   const pc = new PeerConnection();
   window.NET = pc;
 
+  // 關卡選擇(1-1 ~ 1-8),四個進遊戲的按鈕都會用目前選到的關卡。
+  const LEVEL_COUNT_MENU = 8;
+  let selectedLevel = 1;
+  const levelDisplay = document.getElementById('level-display');
+  function renderLevelDisplay() {
+    levelDisplay.textContent = '1-' + selectedLevel;
+  }
+  document.getElementById('btn-level-minus').addEventListener('click', () => {
+    selectedLevel = Math.max(1, selectedLevel - 1);
+    renderLevelDisplay();
+  });
+  document.getElementById('btn-level-plus').addEventListener('click', () => {
+    selectedLevel = Math.min(LEVEL_COUNT_MENU, selectedLevel + 1);
+    renderLevelDisplay();
+  });
+
   const btnCreate = document.getElementById('btn-create-room');
   const btnJoin = document.getElementById('btn-join-room');
   const inputCode = document.getElementById('input-room-code');
@@ -39,6 +55,7 @@ window.addEventListener('orientationchange', () => {
   btnCreate.addEventListener('click', () => {
     menuError.textContent = '';
     window.NET_ROLE = 'host';
+    window.SELECTED_LEVEL = selectedLevel;
     const code = pc.createRoom();
     roomCodeDisplay.textContent = code;
     hostView.classList.remove('hidden');
@@ -57,6 +74,7 @@ window.addEventListener('orientationchange', () => {
     }
     menuError.textContent = '';
     window.NET_ROLE = 'joiner';
+    window.SELECTED_LEVEL = selectedLevel;
     pc.joinRoom(code);
     joiningCodeLabel.textContent = code;
     hostView.classList.add('hidden');
@@ -89,6 +107,7 @@ window.addEventListener('orientationchange', () => {
     menuError.textContent = '';
     window.NET_ROLE = 'host';
     window.LOCAL_TEST_MODE = true;
+    window.SELECTED_LEVEL = selectedLevel;
     startGame();
   });
 
@@ -97,6 +116,7 @@ window.addEventListener('orientationchange', () => {
     window.NET_ROLE = 'host';
     window.LOCAL_TEST_MODE = true;
     window.EDIT_MODE = true;
+    window.SELECTED_LEVEL = selectedLevel;
     startGame();
   });
 
