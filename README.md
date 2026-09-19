@@ -1,6 +1,6 @@
 # CoopCookingGame
 
-**目前版本:V1.7**
+**目前版本:V1.8**
 
 雙人合作手機網頁遊戲,類似《胡鬧廚房》玩法,兩支 iPhone 透過 WebRTC 直連遊玩,不需要 App Store,不需要 Mac,遊戲進行中不需要電腦。
 
@@ -61,7 +61,7 @@ dev-server.js             # 開發用本機靜態檔案伺服器
 - [ ] 正式美術素材替換
 
 ## 美術素材
-- 角色:P1(貓)、P2(熊)都是真正的 PNG 圖,依移動方向切換左右圖(`assets/sprites/p1_left.png` / `p1_right.png` / `p1_idle.png`,P2 同理),靜止時顯示 idle 圖
+- 角色:P1(貓)、P2(熊)都是真正的 PNG 圖(已去背,背景透明),依移動方向切換左右圖(`assets/sprites/p1_left.png` / `p1_right.png` / `p1_idle.png`,P2 同理),靜止時顯示 idle 圖
 - 桌子:使用者提供的木紋桌面圖(`assets/sprites/table.png`)
 - 背景:使用者提供的磁磚花紋圖(`assets/sprites/background.png`)
 - 其餘站點(廚具、出餐口等)仍是方形色塊 + emoji 佔位,不顯示名稱文字
