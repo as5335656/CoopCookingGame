@@ -7,6 +7,7 @@ const MOVE_SPEED = 220; // px/sec
 const INTERACT_RADIUS = 72;
 const MOVE_ARRIVE_DIST = 4;
 const PLAYER_SIZE = 64; // 角色碰撞用的方形邊長,跟顯示大小一致
+const MOVE_STUCK_TIMEOUT_MS = 2500; // 如果因為碰撞卡住太久走不到目標,直接放行,避免永久卡死
 
 // 中間走道兩邊都不能穿越,雙方各自鎖在自己的區域,只能靠出餐口交接東西。
 const ZONE_MAX_X = { host: 450, joiner: WORLD_W - 30 };
@@ -110,6 +111,18 @@ const STATION_TYPE_PALETTE = [
   { type: 'table', customerEmoji: '🐼', shortLabel: '桌子' }
 ];
 
+// 編輯模式「調整大小」下拉選單用的種類名稱對照。
+const TYPE_LABELS = {
+  ingredient_source: '材料箱',
+  cooking: '油炸鍋',
+  plate_stack: '取盤',
+  trash: '垃圾桶',
+  workbench: '工作台',
+  pass_window: '出餐口',
+  dispenser: '飲料機',
+  table: '桌子'
+};
+
 class KitchenScene extends Phaser.Scene {
   constructor() {
     super('KitchenScene');
@@ -117,7 +130,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.0';
+    const v = '?v=2.1';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
     this.load.image('p1_left', 'assets/sprites/p1_left.png' + v);
@@ -157,6 +170,7 @@ class KitchenScene extends Phaser.Scene {
     this.localPos = { x: PLAYER_SPAWN[this.role].x, y: PLAYER_SPAWN[this.role].y };
     this.moveTarget = null;
     this.pendingInteractStationId = null;
+    this.moveStartTime = 0;
 
     if (this.localTestMode) {
       // 本機測試模式:一個人同時操作兩個角色,不走網路,直接在同一份 state 上互動。
@@ -166,6 +180,7 @@ class KitchenScene extends Phaser.Scene {
       };
       this.testMoveTargets = { host: null, joiner: null };
       this.testPendingInteract = { host: null, joiner: null };
+      this.testMoveStartTime = { host: 0, joiner: 0 };
       document.getElementById('btn-interact').style.display = 'none';
     }
 
@@ -332,6 +347,7 @@ class KitchenScene extends Phaser.Scene {
         const targetY = Phaser.Math.Clamp(def.y, 110, WORLD_H - 30);
         this.moveTarget = { x: targetX, y: targetY };
         this.pendingInteractStationId = stationId;
+        this.moveStartTime = performance.now();
         this.showTapMarker(targetX, targetY);
       }
     });
@@ -346,6 +362,7 @@ class KitchenScene extends Phaser.Scene {
     const targetY = Phaser.Math.Clamp(def.y, 110, WORLD_H - 30);
     this.testMoveTargets[role] = { x: targetX, y: targetY };
     this.testPendingInteract[role] = stationId;
+    this.testMoveStartTime[role] = performance.now();
     this.showTapMarker(targetX, targetY);
   }
 
@@ -376,9 +393,15 @@ class KitchenScene extends Phaser.Scene {
       pos.y = Phaser.Math.Clamp(pos.y, 110, WORLD_H - 30);
 
       // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
+      // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
       if (target) {
         const distToTarget = Phaser.Math.Distance.Between(pos.x, pos.y, target.x, target.y);
-        if (distToTarget <= INTERACT_RADIUS) {
+        const stuck = performance.now() - this.testMoveStartTime[role] > MOVE_STUCK_TIMEOUT_MS;
+        if (distToTarget <= INTERACT_RADIUS || stuck) {
+          if (stuck) {
+            pos.x = target.x;
+            pos.y = target.y;
+          }
           this.testMoveTargets[role] = null;
           const stationId = this.testPendingInteract[role];
           if (stationId) {
@@ -457,15 +480,21 @@ class KitchenScene extends Phaser.Scene {
     this.editedLayout = {}; // { [id]: {x, y} },記錄被拖過的最終位置
     this.dynamicDefs = {}; // { [id]: def },記錄編輯模式下新增的物件完整定義
     this.nextEditId = {};
-    const anyDef = STATION_LAYOUT[Object.keys(STATION_LAYOUT)[0]];
-    this.globalSize = (anyDef && anyDef.size) || 64; // 所有物件目前統一的大小,若有先前存過的佈局就沿用
+    this.sizeFilter = 'all'; // 目前大小調整要套用在哪個種類,'all' = 全部物件
+
+    this.sizes = {}; // { [id]: size },每個物件各自的大小
+    for (const id in this.stationSprites) {
+      const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
+      const isTable = this.stationSprites[id].isTable;
+      this.sizes[id] = (base && base.size) || (isTable ? 68 : 64);
+    }
 
     for (const id in this.stationSprites) {
       this.makeDraggable(id, this.stationSprites[id].container);
     }
 
     this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-      const resolved = this.resolveCollision(gameObject.stationId, dragX, dragY, this.globalSize);
+      const resolved = this.resolveCollision(gameObject.stationId, dragX, dragY, this.sizes[gameObject.stationId]);
       gameObject.x = resolved.x;
       gameObject.y = resolved.y;
     });
@@ -487,9 +516,27 @@ class KitchenScene extends Phaser.Scene {
       palette.appendChild(btn);
     });
 
-    document.getElementById('size-display').textContent = this.globalSize;
-    document.getElementById('btn-size-minus').onclick = () => this.adjustGlobalSize(-8);
-    document.getElementById('btn-size-plus').onclick = () => this.adjustGlobalSize(8);
+    const filterSelect = document.getElementById('size-type-filter');
+    filterSelect.innerHTML = '';
+    const allOpt = document.createElement('option');
+    allOpt.value = 'all';
+    allOpt.textContent = '全部物件';
+    filterSelect.appendChild(allOpt);
+    for (const type in TYPE_LABELS) {
+      const opt = document.createElement('option');
+      opt.value = type;
+      opt.textContent = TYPE_LABELS[type];
+      filterSelect.appendChild(opt);
+    }
+    filterSelect.value = 'all';
+    filterSelect.onchange = () => {
+      this.sizeFilter = filterSelect.value;
+      this.updateSizeDisplay();
+    };
+
+    this.updateSizeDisplay();
+    document.getElementById('btn-size-minus').onclick = () => this.adjustFilteredSize(-8);
+    document.getElementById('btn-size-plus').onclick = () => this.adjustFilteredSize(8);
 
     document.getElementById('btn-copy-layout').onclick = () => {
       const textarea = document.getElementById('edit-output');
@@ -520,7 +567,7 @@ class KitchenScene extends Phaser.Scene {
 
   makeDraggable(id, container) {
     container.stationId = id;
-    const size = this.globalSize || 64;
+    const size = this.sizes[id] || 64;
     container.setSize(size, size);
     container.setInteractive();
     this.input.setDraggable(container);
@@ -536,13 +583,33 @@ class KitchenScene extends Phaser.Scene {
     view.container.setSize(size, size);
   }
 
-  // 一次調整「所有物件」的大小,不用先選取單一物件。
-  adjustGlobalSize(delta) {
-    this.globalSize = Phaser.Math.Clamp(this.globalSize + delta, 32, 140);
+  // 目前選到的種類('all' = 全部)底下有哪些站點 id。
+  getFilteredIds() {
+    const ids = [];
     for (const id in this.stationSprites) {
-      this.applyStationSize(id, this.globalSize);
+      const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
+      if (this.sizeFilter === 'all' || (base && base.type === this.sizeFilter)) {
+        ids.push(id);
+      }
     }
-    document.getElementById('size-display').textContent = this.globalSize;
+    return ids;
+  }
+
+  updateSizeDisplay() {
+    const ids = this.getFilteredIds();
+    const size = ids.length > 0 ? this.sizes[ids[0]] : 64;
+    document.getElementById('size-display').textContent = size;
+  }
+
+  // 只調整目前選到的種類(或全部)的物件大小。
+  adjustFilteredSize(delta) {
+    const ids = this.getFilteredIds();
+    ids.forEach((id) => {
+      const next = Phaser.Math.Clamp((this.sizes[id] || 64) + delta, 32, 140);
+      this.sizes[id] = next;
+      this.applyStationSize(id, next);
+    });
+    this.updateSizeDisplay();
     this.updateEditOutput();
   }
 
@@ -552,7 +619,7 @@ class KitchenScene extends Phaser.Scene {
     for (const otherId in this.stationSprites) {
       if (otherId === movingId) continue;
       const other = this.stationSprites[otherId].container;
-      obstacles.push({ x: other.x, y: other.y, size: this.globalSize });
+      obstacles.push({ x: other.x, y: other.y, size: this.sizes[otherId] || 64 });
     }
     return this.resolveCollisionAgainstList(x, y, size, obstacles);
   }
@@ -565,8 +632,13 @@ class KitchenScene extends Phaser.Scene {
 
     const view = def.type === 'table' ? this.createTableView(def) : this.createEquipmentView(def);
     this.stationSprites[id] = view;
+
+    // 新物件預設大小:如果目前選的種類正好符合,就沿用那個大小,不然用預設值。
+    const defaultSize = tpl.type === 'table' ? 68 : 64;
+    this.sizes[id] = this.sizeFilter === tpl.type ? this.sizes[this.getFilteredIds()[0]] || defaultSize : defaultSize;
+
     this.makeDraggable(id, view.container);
-    this.applyStationSize(id, this.globalSize);
+    this.applyStationSize(id, this.sizes[id]);
 
     const stationState = createStationState(def);
     if (stationState) this.state.stations[id] = stationState;
@@ -579,7 +651,7 @@ class KitchenScene extends Phaser.Scene {
     for (const id in this.stationSprites) {
       const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
       const posOverride = this.editedLayout[id];
-      merged[id] = Object.assign({}, base, { size: this.globalSize });
+      merged[id] = Object.assign({}, base, { size: this.sizes[id] || 64 });
       if (posOverride) {
         merged[id].x = posOverride.x;
         merged[id].y = posOverride.y;
@@ -634,9 +706,15 @@ class KitchenScene extends Phaser.Scene {
     this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 110, WORLD_H - 30);
 
     // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
+    // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
     if (this.moveTarget) {
       const distToTarget = Phaser.Math.Distance.Between(this.localPos.x, this.localPos.y, this.moveTarget.x, this.moveTarget.y);
-      if (distToTarget <= INTERACT_RADIUS) {
+      const stuck = performance.now() - this.moveStartTime > MOVE_STUCK_TIMEOUT_MS;
+      if (distToTarget <= INTERACT_RADIUS || stuck) {
+        if (stuck) {
+          this.localPos.x = this.moveTarget.x;
+          this.localPos.y = this.moveTarget.y;
+        }
         this.moveTarget = null;
         if (this.pendingInteractStationId) {
           const stationId = this.pendingInteractStationId;

@@ -267,6 +267,16 @@ h2 {
   gap: 4px;
 }
 
+.type-select {
+  width: 100%;
+  padding: 10px;
+  font-size: 15px;
+  border-radius: 8px;
+  border: 1px solid #6b5a45;
+  background: #3a2c20;
+  color: #f5ead9;
+}
+
 .size-display {
   align-self: center;
   min-width: 32px;
