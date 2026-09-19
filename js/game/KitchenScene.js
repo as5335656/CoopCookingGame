@@ -27,13 +27,39 @@ const STATION_LAYOUT = {
   table_2: { x: 850, y: 420, type: 'table', customerEmoji: '🐧', label: '桌位2' }
 };
 
+// 編輯模式存的佈局只在「這台裝置/瀏覽器」裡有效(用 localStorage),
+// 重新整理網頁不會不見,但不會同步給別台裝置——要讓兩支手機都看到同一份佈局,
+// 還是要把「複製佈局」的結果貼給開發者,寫進程式碼裡正式部署。
+const LAYOUT_STORAGE_KEY = 'coopCookingLayout';
+
+function loadCustomLayoutIfAny() {
+  let saved;
+  try {
+    saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
+  } catch (e) {
+    return; // 部分瀏覽器情境(例如無痕模式)可能無法存取 localStorage
+  }
+  if (!saved) return;
+  try {
+    const parsed = JSON.parse(saved);
+    for (const key in STATION_LAYOUT) delete STATION_LAYOUT[key];
+    Object.assign(STATION_LAYOUT, parsed);
+  } catch (e) {
+    // 儲存內容壞掉就當作沒有,繼續用程式碼內建的預設佈局
+  }
+}
+
 const PLAYER_SPAWN = {
   host: { x: 220, y: 300 },
   joiner: { x: 620, y: 400 }
 };
 
-const PLAYER_EMOJI = { host: '🐱', joiner: '🦊' };
-const PLAYER_COLOR = { host: 0x4a90d9, joiner: 0xd97a4a };
+// 角色圖片:依移動方向切換 left/right,靜止時用 idle。
+const PLAYER_TEXTURES = {
+  host: { left: 'p1_left', right: 'p1_right', idle: 'p1_idle' },
+  joiner: { left: 'p2_left', right: 'p2_right', idle: 'p2_idle' }
+};
+const FACING_CHANGE_THRESHOLD = 0.4; // px/frame,超過這個位移量才判斷是在往左/往右走
 
 // 編輯模式底下「新增物件」的可選類型清單
 const STATION_TYPE_PALETTE = [
@@ -54,6 +80,13 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     this.load.image('table_wood', 'assets/sprites/table.png');
+    this.load.image('kitchen_bg', 'assets/sprites/background.png');
+    this.load.image('p1_left', 'assets/sprites/p1_left.png');
+    this.load.image('p1_right', 'assets/sprites/p1_right.png');
+    this.load.image('p1_idle', 'assets/sprites/p1_idle.png');
+    this.load.image('p2_left', 'assets/sprites/p2_left.png');
+    this.load.image('p2_right', 'assets/sprites/p2_right.png');
+    this.load.image('p2_idle', 'assets/sprites/p2_idle.png');
   }
 
   create() {
@@ -63,6 +96,7 @@ class KitchenScene extends Phaser.Scene {
     this.localTestMode = !!window.LOCAL_TEST_MODE;
     this.editMode = !!window.EDIT_MODE;
 
+    loadCustomLayoutIfAny();
     this.state = this.isHost ? createInitialState() : null;
 
     this.drawBackground();
@@ -128,10 +162,9 @@ class KitchenScene extends Phaser.Scene {
   }
 
   drawBackground() {
-    this.add.rectangle(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, 0x5c8f7a).setDepth(-2);
-    this.add.rectangle(240, WORLD_H / 2 + 20, 480, WORLD_H - 40, 0xd9b98a).setDepth(-1); // 左:廚房地板
-    this.add.rectangle(720, WORLD_H / 2 + 20, 480, WORLD_H - 40, 0xf0c98f).setDepth(-1); // 右:外場地板
-    this.add.rectangle(480, WORLD_H / 2 + 20, 40, WORLD_H - 40, 0x8a6d4a).setDepth(-1); // 中間走道分隔
+    this.add.image(WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setDepth(-2);
+    // 中間走道分隔線(半透明深色條),提示這裡兩邊都不能穿越
+    this.add.rectangle(480, WORLD_H / 2, 36, WORLD_H, 0x2b2018, 0.35).setDepth(-1);
   }
 
   createStations() {
@@ -149,8 +182,9 @@ class KitchenScene extends Phaser.Scene {
   // 所有站點都用方形(不再用圓形),不顯示名稱文字。
   createEquipmentView(def) {
     const container = this.add.container(def.x, def.y);
+    const size = def.size || 64;
 
-    const bg = this.add.rectangle(0, 0, 64, 64, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
+    const bg = this.add.rectangle(0, 0, size, size, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
     const icon = def.emoji ? this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5) : null;
     const progressBg = this.add.rectangle(0, 42, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
     const progressBar = this.add.rectangle(-26, 42, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
@@ -167,7 +201,7 @@ class KitchenScene extends Phaser.Scene {
   createTableView(def) {
     const container = this.add.container(def.x, def.y);
 
-    const tableTop = this.add.image(0, 0, 'table_wood').setDisplaySize(68, 68);
+    const tableTop = this.add.image(0, 0, 'table_wood').setDisplaySize(def.size || 68, def.size || 68);
     const customerText = this.add.text(0, -46, '', { fontSize: '26px' }).setOrigin(0.5);
     const plate = this.add.rectangle(0, 6, 36, 36, 0xf5ead9).setStrokeStyle(2, 0xcbbfa8).setVisible(false);
     const foodText = this.add.text(0, 6, '', { fontSize: '22px' }).setOrigin(0.5);
@@ -184,19 +218,22 @@ class KitchenScene extends Phaser.Scene {
     for (const role of ['host', 'joiner']) {
       const spawn = PLAYER_SPAWN[role];
       const container = this.add.container(spawn.x, spawn.y);
-      const body = this.add.rectangle(0, 0, 44, 44, PLAYER_COLOR[role]).setStrokeStyle(3, 0xffffff);
-      const face = this.add.text(0, 0, PLAYER_EMOJI[role], { fontSize: '24px' }).setOrigin(0.5);
-      const carryText = this.add.text(0, -36, '', { fontSize: '20px' }).setOrigin(0.5);
-      const roleLabel = this.add.text(0, 30, role === 'host' ? 'P1' : 'P2', {
+      const image = this.add.image(0, 0, PLAYER_TEXTURES[role].idle).setDisplaySize(64, 64);
+      const carryText = this.add.text(0, -40, '', { fontSize: '20px' }).setOrigin(0.5);
+      const roleLabel = this.add.text(0, 34, role === 'host' ? 'P1' : 'P2', {
         fontSize: '11px',
         color: '#ffffff',
-        fontStyle: 'bold'
+        fontStyle: 'bold',
+        backgroundColor: '#00000080'
       }).setOrigin(0.5);
-      container.add([body, face, roleLabel, carryText]);
+      container.add([image, roleLabel, carryText]);
 
       this.playerSprites[role] = {
         container,
+        image,
         carryText,
+        facing: 'idle',
+        lastX: spawn.x,
         x: spawn.x,
         y: spawn.y,
         targetX: spawn.x,
@@ -296,28 +333,44 @@ class KitchenScene extends Phaser.Scene {
       sprite.container.setPosition(pos.x, pos.y);
       sprite.x = pos.x;
       sprite.y = pos.y;
+      this.updateFacing(role, pos.x);
+    }
+  }
+
+  // 依角色這一幀實際移動的方向切換 left/right/idle 圖片。
+  updateFacing(role, newX) {
+    const sprite = this.playerSprites[role];
+    const dx = newX - sprite.lastX;
+    let facing;
+    if (dx > FACING_CHANGE_THRESHOLD) facing = 'right';
+    else if (dx < -FACING_CHANGE_THRESHOLD) facing = 'left';
+    else facing = 'idle';
+
+    sprite.lastX = newX;
+    if (facing !== sprite.facing) {
+      sprite.facing = facing;
+      sprite.image.setTexture(PLAYER_TEXTURES[role][facing]);
     }
   }
 
   // 編輯模式:拖拉既有物件調整位置(不能互相重疊,撞到會卡在邊緣)、
-  // 調整選取物件的大小、新增物件,結果即時整理成可複製的佈局文字。
+  // 用單一控制項一次調整「所有物件」的大小、新增物件,結果即時整理成可複製的佈局文字。
   // 進編輯模式時遊戲模擬(訂單/顧客/計時)是暫停的,場景裡不會有顧客。
   enableEditMode() {
     document.getElementById('btn-interact').style.display = 'none';
 
     this.editedLayout = {}; // { [id]: {x, y} },記錄被拖過的最終位置
-    this.editedSizes = {}; // { [id]: size },記錄調整過的大小
     this.dynamicDefs = {}; // { [id]: def },記錄編輯模式下新增的物件完整定義
     this.nextEditId = {};
-    this.selectedStationId = null;
+    const anyDef = STATION_LAYOUT[Object.keys(STATION_LAYOUT)[0]];
+    this.globalSize = (anyDef && anyDef.size) || 64; // 所有物件目前統一的大小,若有先前存過的佈局就沿用
 
     for (const id in this.stationSprites) {
       this.makeDraggable(id, this.stationSprites[id].container);
     }
 
     this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
-      const size = this.getStationSize(gameObject.stationId);
-      const resolved = this.resolveCollision(gameObject.stationId, dragX, dragY, size);
+      const resolved = this.resolveCollision(gameObject.stationId, dragX, dragY, this.globalSize);
       gameObject.x = resolved.x;
       gameObject.y = resolved.y;
     });
@@ -339,8 +392,9 @@ class KitchenScene extends Phaser.Scene {
       palette.appendChild(btn);
     });
 
-    document.getElementById('btn-size-minus').onclick = () => this.adjustSelectedSize(-8);
-    document.getElementById('btn-size-plus').onclick = () => this.adjustSelectedSize(8);
+    document.getElementById('size-display').textContent = this.globalSize;
+    document.getElementById('btn-size-minus').onclick = () => this.adjustGlobalSize(-8);
+    document.getElementById('btn-size-plus').onclick = () => this.adjustGlobalSize(8);
 
     document.getElementById('btn-copy-layout').onclick = () => {
       const textarea = document.getElementById('edit-output');
@@ -355,24 +409,25 @@ class KitchenScene extends Phaser.Scene {
       }
     };
 
+    document.getElementById('btn-reset-layout').onclick = () => {
+      try {
+        localStorage.removeItem(LAYOUT_STORAGE_KEY);
+      } catch (e) {
+        // 忽略
+      }
+      location.reload();
+    };
+
     document.getElementById('edit-panel').classList.remove('hidden');
     this.updateEditOutput();
   }
 
   makeDraggable(id, container) {
     container.stationId = id;
-    const size = this.getStationSize(id);
+    const size = this.globalSize || 64;
     container.setSize(size, size);
     container.setInteractive();
     this.input.setDraggable(container);
-    container.on('pointerdown', () => {
-      this.selectedStationId = id;
-      document.getElementById('size-display').textContent = this.getStationSize(id);
-    });
-  }
-
-  getStationSize(id) {
-    return this.editedSizes[id] || 64;
   }
 
   applyStationSize(id, size) {
@@ -385,13 +440,13 @@ class KitchenScene extends Phaser.Scene {
     view.container.setSize(size, size);
   }
 
-  adjustSelectedSize(delta) {
-    if (!this.selectedStationId) return;
-    const id = this.selectedStationId;
-    const next = Phaser.Math.Clamp(this.getStationSize(id) + delta, 32, 140);
-    this.editedSizes[id] = next;
-    this.applyStationSize(id, next);
-    document.getElementById('size-display').textContent = next;
+  // 一次調整「所有物件」的大小,不用先選取單一物件。
+  adjustGlobalSize(delta) {
+    this.globalSize = Phaser.Math.Clamp(this.globalSize + delta, 32, 140);
+    for (const id in this.stationSprites) {
+      this.applyStationSize(id, this.globalSize);
+    }
+    document.getElementById('size-display').textContent = this.globalSize;
     this.updateEditOutput();
   }
 
@@ -399,10 +454,10 @@ class KitchenScene extends Phaser.Scene {
   // 讓物件卡在對方邊緣,而不是直接疊上去。
   resolveCollision(movingId, x, y, size) {
     const halfA = size / 2;
+    const halfB = size / 2; // 所有物件目前統一大小
     for (const otherId in this.stationSprites) {
       if (otherId === movingId) continue;
       const other = this.stationSprites[otherId].container;
-      const halfB = this.getStationSize(otherId) / 2;
 
       const dx = x - other.x;
       const dy = y - other.y;
@@ -429,6 +484,7 @@ class KitchenScene extends Phaser.Scene {
     const view = def.type === 'table' ? this.createTableView(def) : this.createEquipmentView(def);
     this.stationSprites[id] = view;
     this.makeDraggable(id, view.container);
+    this.applyStationSize(id, this.globalSize);
 
     const stationState = createStationState(def);
     if (stationState) this.state.stations[id] = stationState;
@@ -441,17 +497,21 @@ class KitchenScene extends Phaser.Scene {
     for (const id in this.stationSprites) {
       const base = STATION_LAYOUT[id] || this.dynamicDefs[id];
       const posOverride = this.editedLayout[id];
-      const sizeOverride = this.editedSizes[id];
-      merged[id] = Object.assign({}, base);
+      merged[id] = Object.assign({}, base, { size: this.globalSize });
       if (posOverride) {
         merged[id].x = posOverride.x;
         merged[id].y = posOverride.y;
       }
-      if (sizeOverride) {
-        merged[id].size = sizeOverride;
-      }
     }
-    document.getElementById('edit-output').value = JSON.stringify(merged, null, 2);
+    const json = JSON.stringify(merged, null, 2);
+    document.getElementById('edit-output').value = json;
+
+    // 自動存到這台裝置的瀏覽器裡,重新整理/下次進遊戲都會沿用這份佈局。
+    try {
+      localStorage.setItem(LAYOUT_STORAGE_KEY, json);
+    } catch (e) {
+      // localStorage 可能被封鎖,不影響複製佈局功能
+    }
   }
 
   showTapMarker(x, y) {
@@ -499,6 +559,7 @@ class KitchenScene extends Phaser.Scene {
     mySprite.container.setPosition(this.localPos.x, this.localPos.y);
     mySprite.x = this.localPos.x;
     mySprite.y = this.localPos.y;
+    this.updateFacing(this.role, this.localPos.x);
   }
 
   updateRemoteMovement() {
@@ -506,6 +567,7 @@ class KitchenScene extends Phaser.Scene {
     remote.container.setPosition(remote.targetX, remote.targetY);
     remote.x = remote.targetX;
     remote.y = remote.targetY;
+    this.updateFacing(this.remoteRole, remote.targetX);
 
     const now = performance.now();
     if (now - this.lastMoveSent > 80) {
@@ -583,7 +645,8 @@ class KitchenScene extends Phaser.Scene {
       } else if (st.type === 'pass_window' || st.type === 'workbench') {
         view.heldItemText.setText(st.itemHeld ? itemEmoji(st.itemHeld) : '');
       } else if (st.type === 'table') {
-        if (st.occupied) {
+        // 編輯模式下不管實際 state 內容為何,一律當成空桌顯示,絕對不會出現顧客。
+        if (st.occupied && !this.editMode) {
           const recipe = getRecipe(st.recipeId);
           view.customerText.setText(view.def.customerEmoji || '🐼');
           view.plate.setVisible(true);
