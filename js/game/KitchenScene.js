@@ -5,18 +5,26 @@ const WORLD_W = 960;
 const WORLD_H = 540;
 const MOVE_SPEED = 220; // px/sec
 const INTERACT_RADIUS = 72;
+const MOVE_ARRIVE_DIST = 4;
 
+// 中間走道兩邊都不能穿越,雙方各自鎖在自己的區域,只能靠出餐口交接東西。
+const ZONE_MAX_X = { host: 450, joiner: WORLD_W - 30 };
+const ZONE_MIN_X = { host: 30, joiner: 510 };
+
+// 佈局參考截圖:廚房設備排成流理台式的 2 列(不是單排一直線),
+// 中間走道垂直分隔廚房與外場,外場桌位一上一下錯開擺放。
 const STATION_LAYOUT = {
-  ingredient_potato: { x: 90, y: 150, type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', label: '生馬鈴薯' },
-  fryer_1: { x: 90, y: 260, type: 'cooking', recipeId: 'fries', emoji: '🍳', label: '油炸鍋' },
-  plate_stack: { x: 90, y: 370, type: 'plate_stack', emoji: '🍽️', label: '取盤' },
-  trash_bin: { x: 90, y: 470, type: 'trash', emoji: '🗑️', label: '垃圾桶' },
+  ingredient_potato: { x: 110, y: 160, type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', label: '材料箱' },
+  fryer_1: { x: 230, y: 160, type: 'cooking', recipeId: 'fries', emoji: '🍳', label: '油炸鍋' },
+  plate_stack: { x: 350, y: 160, type: 'plate_stack', emoji: '🍽️', label: '取盤' },
+  trash_bin: { x: 110, y: 400, type: 'trash', emoji: '🗑️', label: '垃圾桶' },
+  workbench_1: { x: 230, y: 400, type: 'workbench', emoji: '', label: '工作台' },
 
   pass_window: { x: 480, y: 300, type: 'pass_window', emoji: '🛎️', label: '出餐口' },
 
-  drink_dispenser: { x: 860, y: 150, type: 'dispenser', recipeId: 'drink', emoji: '🥤', label: '飲料機' },
-  table_1: { x: 700, y: 260, type: 'table', emoji: '', label: '桌位1' },
-  table_2: { x: 860, y: 460, type: 'table', emoji: '', label: '桌位2' }
+  drink_dispenser: { x: 850, y: 150, type: 'dispenser', recipeId: 'drink', emoji: '🥤', label: '飲料機' },
+  table_1: { x: 650, y: 220, type: 'table', customerEmoji: '🐼', label: '桌位1' },
+  table_2: { x: 850, y: 420, type: 'table', customerEmoji: '🐧', label: '桌位2' }
 };
 
 const PLAYER_SPAWN = {
@@ -32,10 +40,15 @@ class KitchenScene extends Phaser.Scene {
     super('KitchenScene');
   }
 
+  preload() {
+    this.load.image('kitchen_bg', 'assets/sprites/kitchen_bg.png');
+  }
+
   create() {
     this.role = window.NET_ROLE;
     this.isHost = this.role === 'host';
     this.remoteRole = this.isHost ? 'joiner' : 'host';
+    this.localTestMode = !!window.LOCAL_TEST_MODE;
 
     this.state = this.isHost ? createInitialState() : null;
 
@@ -44,21 +57,37 @@ class KitchenScene extends Phaser.Scene {
     this.createPlayers();
 
     this.localPos = { x: PLAYER_SPAWN[this.role].x, y: PLAYER_SPAWN[this.role].y };
+    this.moveTarget = null;
 
-    GameSync.onRemoteMove = (x, y) => {
-      const s = this.playerSprites[this.remoteRole];
-      s.targetX = x;
-      s.targetY = y;
-    };
+    if (this.localTestMode) {
+      // 本機測試模式:一個人同時操作兩個角色,不走網路,直接在同一份 state 上互動。
+      this.testPositions = {
+        host: { x: PLAYER_SPAWN.host.x, y: PLAYER_SPAWN.host.y },
+        joiner: { x: PLAYER_SPAWN.joiner.x, y: PLAYER_SPAWN.joiner.y }
+      };
+      this.testMoveTargets = { host: null, joiner: null };
+      this.testPendingInteract = { host: null, joiner: null };
+      document.getElementById('btn-interact').style.display = 'none';
+    }
 
-    if (this.isHost) {
-      GameSync.onInteractRequest = (stationId) => {
-        interactStation(this.state, stationId, 'joiner');
+    this.setupTapToMove();
+
+    if (!this.localTestMode) {
+      GameSync.onRemoteMove = (x, y) => {
+        const s = this.playerSprites[this.remoteRole];
+        s.targetX = x;
+        s.targetY = y;
       };
-    } else {
-      GameSync.onStateUpdate = (state) => {
-        this.state = state;
-      };
+
+      if (this.isHost) {
+        GameSync.onInteractRequest = (stationId) => {
+          interactStation(this.state, stationId, 'joiner');
+        };
+      } else {
+        GameSync.onStateUpdate = (state) => {
+          this.state = state;
+        };
+      }
     }
 
     this.lastMoveSent = 0;
@@ -80,32 +109,60 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
+  // 背景暫時直接用參考截圖裁出來的畫面(使用者自己的圖),之後會換成正式美術。
+  // 因為背景圖裡本來就畫了它自己的物件跟角色,位置不會跟我們自己畫的站點/玩家完全對齊,
+  // 純粹先求「看起來像」,等真的 PNG 素材來了就會整個換掉。
   drawBackground() {
-    this.add.rectangle(WORLD_W / 2, WORLD_H / 2, WORLD_W, WORLD_H, 0x5c8f7a).setDepth(-2);
-    this.add.rectangle(240, WORLD_H / 2 + 20, 480, WORLD_H - 40, 0xd9b98a).setDepth(-1); // 左:廚房地板
-    this.add.rectangle(720, WORLD_H / 2 + 20, 480, WORLD_H - 40, 0xf0c98f).setDepth(-1); // 右:外場地板
-    this.add.rectangle(480, WORLD_H / 2 + 20, 40, WORLD_H - 40, 0x8a6d4a).setDepth(-1); // 中間走道分隔
+    this.add.image(WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setDepth(-2);
   }
 
   createStations() {
     this.stationSprites = {};
     for (const id in STATION_LAYOUT) {
       const def = STATION_LAYOUT[id];
-      const container = this.add.container(def.x, def.y);
-
-      const bg = this.add.circle(0, 0, 34, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
-      const icon = def.emoji ? this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5) : null;
-      const label = this.add.text(0, 40, def.label, { fontSize: '11px', color: '#3a2c20', fontStyle: 'bold' }).setOrigin(0.5);
-      const progressBg = this.add.rectangle(0, 52, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
-      const progressBar = this.add.rectangle(-26, 52, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
-      const heldItemText = this.add.text(0, -34, '', { fontSize: '22px' }).setOrigin(0.5);
-
-      const parts = [bg, label, progressBg, progressBar, heldItemText];
-      if (icon) parts.push(icon);
-      container.add(parts);
-
-      this.stationSprites[id] = { container, bg, progressBg, progressBar, heldItemText, def };
+      if (def.type === 'table') {
+        this.stationSprites[id] = this.createTableView(def);
+      } else {
+        this.stationSprites[id] = this.createEquipmentView(def);
+      }
     }
+  }
+
+  createEquipmentView(def) {
+    const container = this.add.container(def.x, def.y);
+
+    // 工作台目前還沒有 PNG,先用方形邊框佔位(之後直接換圖不影響邏輯)
+    const bg =
+      def.type === 'workbench'
+        ? this.add.rectangle(0, 0, 64, 64, 0x8a7256).setStrokeStyle(3, 0xf5ead9)
+        : this.add.circle(0, 0, 34, 0x3a2c20).setStrokeStyle(3, 0xf5ead9);
+    const icon = def.emoji ? this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5) : null;
+    const label = this.add.text(0, 40, def.label, { fontSize: '11px', color: '#3a2c20', fontStyle: 'bold' }).setOrigin(0.5);
+    const progressBg = this.add.rectangle(0, 52, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
+    const progressBar = this.add.rectangle(-26, 52, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
+    const heldItemText = this.add.text(0, -34, '', { fontSize: '22px' }).setOrigin(0.5);
+
+    const parts = [bg, label, progressBg, progressBar, heldItemText];
+    if (icon) parts.push(icon);
+    container.add(parts);
+
+    return { container, bg, progressBg, progressBar, heldItemText, def };
+  }
+
+  // 桌子做成方形(跟廚具機台的圓形區分開來),食物/飲料會實際「擺在桌面上」而不是用文字泡泡飄在空中。
+  createTableView(def) {
+    const container = this.add.container(def.x, def.y);
+
+    const tableTop = this.add.rectangle(0, 0, 68, 68, 0xb5824a).setStrokeStyle(3, 0x6e4f2e);
+    const customerText = this.add.text(0, -46, '', { fontSize: '26px' }).setOrigin(0.5);
+    const plate = this.add.circle(0, 6, 20, 0xf5ead9).setStrokeStyle(2, 0xcbbfa8).setVisible(false);
+    const foodText = this.add.text(0, 6, '', { fontSize: '22px' }).setOrigin(0.5);
+    const progressBg = this.add.rectangle(0, 46, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
+    const progressBar = this.add.rectangle(-26, 46, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
+
+    container.add([tableTop, plate, foodText, progressBg, progressBar, customerText]);
+
+    return { container, bg: tableTop, progressBg, progressBar, customerText, plate, foodText, def, isTable: true };
   }
 
   createPlayers() {
@@ -135,13 +192,17 @@ class KitchenScene extends Phaser.Scene {
   }
 
   update(time, delta) {
-    this.updateLocalMovement(delta);
-    this.updateRemoteMovement();
-    this.handleInteractInput(time);
+    if (this.localTestMode) {
+      this.updateLocalTestMode(delta);
+    } else {
+      this.updateLocalMovement(delta);
+      this.updateRemoteMovement();
+      this.handleInteractInput();
+    }
 
     if (this.isHost && this.state && !this.state.ended) {
       tick(this.state, delta);
-      if (time - this.lastStateSent > 150) {
+      if (!this.localTestMode && time - this.lastStateSent > 150) {
         this.lastStateSent = time;
         GameSync.sendState(this.state);
       }
@@ -152,18 +213,100 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
-  updateLocalMovement(delta) {
-    const dx = GameInput.dx;
-    const dy = GameInput.dy;
-    const mag = Math.sqrt(dx * dx + dy * dy);
-    if (mag > 0.15) {
-      const nx = dx / mag;
-      const ny = dy / mag;
-      this.localPos.x += nx * MOVE_SPEED * (delta / 1000);
-      this.localPos.y += ny * MOVE_SPEED * (delta / 1000);
-      this.localPos.x = Phaser.Math.Clamp(this.localPos.x, 30, WORLD_W - 30);
-      this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 110, WORLD_H - 30);
+  // 點擊場景地板移動,取代搖桿。點到的位置會先被鎖在自己那一側的可移動範圍內
+  // (中間走道兩邊都不能穿越),再設成移動目標。
+  // 本機測試模式下,點左半邊操控 P1、點右半邊操控 P2,且點到站點範圍內會走過去後自動互動。
+  setupTapToMove() {
+    this.input.on('pointerdown', (pointer) => {
+      if (this.localTestMode) {
+        const midX = (ZONE_MAX_X.host + ZONE_MIN_X.joiner) / 2;
+        const role = pointer.worldX < midX ? 'host' : 'joiner';
+        this.handleLocalTestTap(role, pointer.worldX, pointer.worldY);
+      } else {
+        const targetX = Phaser.Math.Clamp(pointer.worldX, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
+        const targetY = Phaser.Math.Clamp(pointer.worldY, 110, WORLD_H - 30);
+        this.moveTarget = { x: targetX, y: targetY };
+        this.showTapMarker(targetX, targetY);
+      }
+    });
+  }
+
+  handleLocalTestTap(role, x, y) {
+    const targetX = Phaser.Math.Clamp(x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
+    const targetY = Phaser.Math.Clamp(y, 110, WORLD_H - 30);
+    this.testMoveTargets[role] = { x: targetX, y: targetY };
+    this.testPendingInteract[role] = this.findNearestStation(targetX, targetY);
+    this.showTapMarker(targetX, targetY);
+  }
+
+  updateLocalTestMode(delta) {
+    const step = MOVE_SPEED * (delta / 1000);
+
+    for (const role of ['host', 'joiner']) {
+      const pos = this.testPositions[role];
+      const target = this.testMoveTargets[role];
+
+      if (target) {
+        const dx = target.x - pos.x;
+        const dy = target.y - pos.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+
+        if (dist <= MOVE_ARRIVE_DIST || step >= dist) {
+          pos.x = target.x;
+          pos.y = target.y;
+          this.testMoveTargets[role] = null;
+
+          const stationId = this.testPendingInteract[role];
+          if (stationId) {
+            interactStation(this.state, stationId, role);
+            this.testPendingInteract[role] = null;
+          }
+        } else {
+          pos.x += (dx / dist) * step;
+          pos.y += (dy / dist) * step;
+        }
+      }
+
+      pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
+      pos.y = Phaser.Math.Clamp(pos.y, 110, WORLD_H - 30);
+
+      const sprite = this.playerSprites[role];
+      sprite.container.setPosition(pos.x, pos.y);
+      sprite.x = pos.x;
+      sprite.y = pos.y;
     }
+  }
+
+  showTapMarker(x, y) {
+    const marker = this.add.circle(x, y, 10, 0xffffff, 0.6);
+    this.tweens.add({
+      targets: marker,
+      scale: 2,
+      alpha: 0,
+      duration: 350,
+      onComplete: () => marker.destroy()
+    });
+  }
+
+  updateLocalMovement(delta) {
+    if (this.moveTarget) {
+      const dx = this.moveTarget.x - this.localPos.x;
+      const dy = this.moveTarget.y - this.localPos.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      const step = MOVE_SPEED * (delta / 1000);
+
+      if (dist <= MOVE_ARRIVE_DIST || step >= dist) {
+        this.localPos.x = this.moveTarget.x;
+        this.localPos.y = this.moveTarget.y;
+        this.moveTarget = null;
+      } else {
+        this.localPos.x += (dx / dist) * step;
+        this.localPos.y += (dy / dist) * step;
+      }
+    }
+
+    this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
+    this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 110, WORLD_H - 30);
 
     const mySprite = this.playerSprites[this.role];
     mySprite.container.setPosition(this.localPos.x, this.localPos.y);
@@ -250,19 +393,23 @@ class KitchenScene extends Phaser.Scene {
           view.heldItemText.setText('');
           view.bg.setStrokeStyle(3, 0xf5ead9);
         }
-      } else if (st.type === 'pass_window') {
+      } else if (st.type === 'pass_window' || st.type === 'workbench') {
         view.heldItemText.setText(st.itemHeld ? itemEmoji(st.itemHeld) : '');
       } else if (st.type === 'table') {
         if (st.occupied) {
           const recipe = getRecipe(st.recipeId);
-          view.heldItemText.setText('🐼 ' + itemEmoji(recipe.platedItem));
+          view.customerText.setText(view.def.customerEmoji || '🐼');
+          view.plate.setVisible(true);
+          view.foodText.setText(itemEmoji(recipe.platedItem));
           const ratio = Phaser.Math.Clamp(st.patience / st.maxPatience, 0, 1);
           view.progressBg.setVisible(true);
           view.progressBar.setVisible(true);
           view.progressBar.width = 52 * ratio;
           view.progressBar.fillColor = ratio < 0.3 ? 0xff6b6b : 0x6fe86f;
         } else {
-          view.heldItemText.setText('');
+          view.customerText.setText('');
+          view.plate.setVisible(false);
+          view.foodText.setText('');
           view.progressBg.setVisible(false);
           view.progressBar.setVisible(false);
         }

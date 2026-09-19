@@ -19,6 +19,8 @@ function createInitialStations() {
       stations[id] = { type: 'dispenser', recipeId: def.recipeId };
     } else if (def.type === 'pass_window') {
       stations[id] = { type: 'pass_window', itemHeld: null };
+    } else if (def.type === 'workbench') {
+      stations[id] = { type: 'workbench', itemHeld: null };
     } else if (def.type === 'trash') {
       stations[id] = { type: 'trash' };
     } else if (def.type === 'table') {

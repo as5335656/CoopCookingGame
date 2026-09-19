@@ -85,6 +85,13 @@ window.addEventListener('orientationchange', () => {
     showScreen('menu');
   });
 
+  document.getElementById('btn-local-test').addEventListener('click', () => {
+    menuError.textContent = '';
+    window.NET_ROLE = 'host';
+    window.LOCAL_TEST_MODE = true;
+    startGame();
+  });
+
   let gameStarted = false;
   function startGame() {
     if (gameStarted) return;
@@ -104,7 +111,6 @@ window.addEventListener('orientationchange', () => {
       scene: [KitchenScene]
     });
 
-    new VirtualJoystick(document.getElementById('joystick-zone'));
     new InteractButtonUI(document.getElementById('btn-interact'));
   }
 

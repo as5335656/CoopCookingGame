@@ -55,6 +55,8 @@ function interactStation(state, stationId, role) {
     }
 
     case 'pass_window':
+    case 'workbench':
+      // 兩者行為相同:拿著東西且站點是空的 -> 放下;沒拿東西且站點有東西 -> 拿起來
       if (player.carrying && !st.itemHeld) {
         st.itemHeld = player.carrying;
         player.carrying = null;

@@ -1,6 +1,8 @@
 // 互動按鈕:按下時把 GameInput.interactJustPressed 設成 true,
 // 遊戲迴圈讀取後會立刻重設為 false(單次觸發,不會持續連點)。
 
+const GameInput = { interactJustPressed: false };
+
 class InteractButtonUI {
   constructor(buttonEl) {
     this.button = buttonEl;
