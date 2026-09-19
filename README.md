@@ -1,6 +1,6 @@
 # CoopCookingGame
 
-**目前版本:V2.4**
+**目前版本:V2.5**
 
 雙人合作手機網頁遊戲,類似《胡鬧廚房》玩法,兩支 iPhone 透過 WebRTC 直連遊玩,不需要 App Store,不需要 Mac,遊戲進行中不需要電腦。
 

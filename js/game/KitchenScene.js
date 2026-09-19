@@ -107,16 +107,16 @@ const FACING_CHANGE_THRESHOLD = 0.4; // px/frame,超過這個位移量才判斷�
 // 編輯模式底下「新增物件」的可選類型清單。
 // 桌子/檯面是地基,要先放;其他廚具要先點選種類(會標記成選取中),再點一個空桌子把它放上去。
 const STATION_TYPE_PALETTE = [
-  { type: 'counter', shortLabel: '桌子/檯面(先放這個當地基)' },
-  { type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', shortLabel: '材料箱(馬鈴薯)' },
-  { type: 'ingredient_source', itemType: 'beef_raw', shortLabel: '材料箱(生牛肉)' },
-  { type: 'ingredient_source', itemType: 'chicken_raw', shortLabel: '材料箱(生雞肉)' },
-  { type: 'ingredient_source', itemType: 'tomato_raw', shortLabel: '材料箱(番茄)' },
-  { type: 'ingredient_source', itemType: 'lettuce', shortLabel: '材料箱(生菜)' },
-  { type: 'ingredient_source', itemType: 'cheese', shortLabel: '材料箱(起士)' },
-  { type: 'ingredient_source', itemType: 'bun', shortLabel: '材料箱(漢堡)' },
-  { type: 'cooking', recipeId: 'fries', emoji: '🍳', shortLabel: '油炸鍋(薯條專用)' },
-  { type: 'cooking', img: 'equip_pan', shortLabel: '平底鍋(通用)' },
+  { type: 'counter', shortLabel: '桌子(先放這個)' },
+  { type: 'ingredient_source', itemType: 'potato_raw', emoji: '🥔', shortLabel: '馬鈴薯箱' },
+  { type: 'ingredient_source', itemType: 'beef_raw', shortLabel: '生牛肉箱' },
+  { type: 'ingredient_source', itemType: 'chicken_raw', shortLabel: '生雞肉箱' },
+  { type: 'ingredient_source', itemType: 'tomato_raw', shortLabel: '番茄箱' },
+  { type: 'ingredient_source', itemType: 'lettuce', shortLabel: '生菜箱' },
+  { type: 'ingredient_source', itemType: 'cheese', shortLabel: '起士箱' },
+  { type: 'ingredient_source', itemType: 'bun', shortLabel: '漢堡箱' },
+  { type: 'cooking', recipeId: 'fries', emoji: '🍳', shortLabel: '油炸鍋' },
+  { type: 'cooking', img: 'equip_pan', shortLabel: '平底鍋' },
   { type: 'cutting', img: 'equip_cutting_board', shortLabel: '鉆板' },
   { type: 'plate_stack', img: 'equip_plate', shortLabel: '取盤' },
   { type: 'trash', emoji: '🗑️', shortLabel: '垃圾桶' },
@@ -147,7 +147,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.4';
+    const v = '?v=2.5';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
