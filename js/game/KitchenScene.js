@@ -147,7 +147,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.7';
+    const v = '?v=2.8';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -1003,7 +1003,9 @@ class KitchenScene extends Phaser.Scene {
           view.progressBar.setVisible(true);
           view.progressBar.width = 52 * Phaser.Math.Clamp(st.progress / (cookDef ? cookDef.cookTimeMs : 1), 0, 1);
           view.progressBar.fillColor = 0xffcf8f;
-          this.setItemVisual(view.heldItemImage, view.heldItemText, null);
+          // 剛放上去還在煮的時候,先顯示生的食材原型,煮好才會換成熟的圖。
+          const rawItem = st.cookingItem || (st.recipeId ? getRecipe(st.recipeId).rawItem : null);
+          this.setItemVisual(view.heldItemImage, view.heldItemText, rawItem);
           this.setStationBorder(view, 0xffcf8f);
         } else if (st.status === 'done') {
           view.progressBg.setVisible(false);
@@ -1028,7 +1030,7 @@ class KitchenScene extends Phaser.Scene {
           view.progressBar.setVisible(true);
           view.progressBar.width = 52 * Phaser.Math.Clamp(st.progress / (cutDef ? cutDef.cutTimeMs : 1), 0, 1);
           view.progressBar.fillColor = 0x8fd1ff;
-          this.setItemVisual(view.heldItemImage, view.heldItemText, null);
+          this.setItemVisual(view.heldItemImage, view.heldItemText, st.cuttingItem);
         } else {
           view.progressBg.setVisible(false);
           view.progressBar.setVisible(false);
