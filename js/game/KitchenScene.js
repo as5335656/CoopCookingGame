@@ -148,7 +148,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.9';
+    const v = '?v=3.0';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -452,7 +452,7 @@ class KitchenScene extends Phaser.Scene {
         const role = pointer.worldX < midX ? 'host' : 'joiner';
         this.handleLocalTestTap(role, pointer.worldX, pointer.worldY);
       } else {
-        const stationId = this.findNearestStation(pointer.worldX, pointer.worldY);
+        const stationId = this.findTappedStation(pointer.worldX, pointer.worldY);
         if (!stationId) return; // 點到空地不移動
 
         const def = STATION_LAYOUT[stationId];
@@ -468,7 +468,7 @@ class KitchenScene extends Phaser.Scene {
   }
 
   handleLocalTestTap(role, x, y) {
-    const stationId = this.findNearestStation(x, y);
+    const stationId = this.findTappedStation(x, y);
     if (!stationId) return; // 點到空地不移動
 
     const def = STATION_LAYOUT[stationId];
@@ -965,6 +965,26 @@ class KitchenScene extends Phaser.Scene {
     let bestDist = INTERACT_RADIUS;
     for (const id in STATION_LAYOUT) {
       const def = STATION_LAYOUT[id];
+      const d = Phaser.Math.Distance.Between(x, y, def.x, def.y);
+      if (d < bestDist) {
+        bestDist = d;
+        best = id;
+      }
+    }
+    return best;
+  }
+
+  // 點擊/點選專用:限定要真的點在該物件自己的方塊範圍內(留一點點容錯)才算點到它,
+  // 不是「離哪個站點最近」——站點排得比較密的時候,兩個站點的 72px 判定半徑會重疊,
+  // 這時候用「最近」來判斷,點在 A 物件上卻可能被判定成點到隔壁的 B(尤其手指觸控不夠精準)。
+  // 用嚴格的方塊範圍判斷,只要沒點進物件自己的方塊裡,就不會被算成點到它。
+  findTappedStation(x, y) {
+    let best = null;
+    let bestDist = Infinity;
+    for (const id in STATION_LAYOUT) {
+      const def = STATION_LAYOUT[id];
+      const half = (def.size || 64) / 2 + 6;
+      if (Math.abs(x - def.x) > half || Math.abs(y - def.y) > half) continue;
       const d = Phaser.Math.Distance.Between(x, y, def.x, def.y);
       if (d < bestDist) {
         bestDist = d;
