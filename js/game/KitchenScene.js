@@ -94,9 +94,10 @@ function loadLevelLayout(levelNum) {
   }
 }
 
+// 出生點要避開所有站點的碰撞範圍(不能一出生就跟站點重疊),兩邊都選在站點之間的空地上。
 const PLAYER_SPAWN = {
-  host: { x: 220, y: 300 },
-  joiner: { x: 620, y: 400 }
+  host: { x: 220, y: 170 },
+  joiner: { x: 730, y: 355 }
 };
 
 // 角色圖片:依移動方向切換 left/right,靜止時用 idle。
@@ -149,7 +150,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=3.2';
+    const v = '?v=3.3';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -502,21 +503,18 @@ class KitchenScene extends Phaser.Scene {
       const pos = this.testPositions[role];
       const target = this.testMoveTargets[role];
 
+      // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣——X、Y 軸分開處理,
+      // 某一軸撞到就那一軸不動,另一軸繼續走,貼著障礙物邊緣滑過去才會順。
       if (target) {
         const dx = target.x - pos.x;
         const dy = target.y - pos.y;
         const dist = Math.sqrt(dx * dx + dy * dy);
         if (dist > MOVE_ARRIVE_DIST) {
           const moveStep = Math.min(step, dist);
-          pos.x += (dx / dist) * moveStep;
-          pos.y += (dy / dist) * moveStep;
+          const obstacles = this.buildCollisionObstacles(role);
+          this.moveAxisSliding(pos, (dx / dist) * moveStep, (dy / dist) * moveStep, PLAYER_SIZE, obstacles);
         }
       }
-
-      // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣。
-      const resolved = this.resolveCollisionAgainstList(pos.x, pos.y, PLAYER_SIZE, this.buildCollisionObstacles(role));
-      pos.x = resolved.x;
-      pos.y = resolved.y;
 
       pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
       pos.y = Phaser.Math.Clamp(pos.y, 30, WORLD_H - 30);
@@ -583,6 +581,50 @@ class KitchenScene extends Phaser.Scene {
       }
     }
     return { x, y };
+  }
+
+  // (x,y) 這個位置會不會跟清單裡任何一個障礙物重疊,只回答是非,不做推開。
+  collidesWithAny(x, y, size, obstacles) {
+    const halfA = size / 2;
+    for (const obs of obstacles) {
+      const halfB = obs.size / 2;
+      if (Math.abs(x - obs.x) < halfA + halfB && Math.abs(y - obs.y) < halfA + halfB) return true;
+    }
+    return false;
+  }
+
+  // 玩家走位專用:X 軸、Y 軸各自獨立嘗試移動、各自獨立檢查會不會撞到障礙物——
+  // 撞到的那一軸這一幀就不動,另一軸不受影響照常走。這樣角色貼著障礙物邊緣走的時候
+  // 是自然地「滑」過去,不會像「先整個往目標方向移動、撞到了才整份推開」那樣,
+  // 每一幀都把剛移動的一點點距離推回原地、卡在原地抖動走不動。
+  moveAxisSliding(pos, moveX, moveY, size, obstacles) {
+    if (moveX !== 0) {
+      const tryX = pos.x + moveX;
+      if (!this.newlyBlocked(pos.x, pos.y, tryX, pos.y, size, obstacles)) {
+        pos.x = tryX;
+      }
+    }
+    if (moveY !== 0) {
+      const tryY = pos.y + moveY;
+      if (!this.newlyBlocked(pos.x, pos.y, pos.x, tryY, size, obstacles)) {
+        pos.y = tryY;
+      }
+    }
+  }
+
+  // 只有「移動後」才跟某個障礙物重疊、而「移動前」沒有跟它重疊,才算被那個障礙物擋住。
+  // 如果起點本來就已經跟某個障礙物重疊(例如硬擠進兩個障礙物中間的窄縫、或卡住放行後
+  // 剛好落在邊界上),不能讓玩家因為「已經在裡面」就完全動彈不得——至少要放行讓他離開。
+  newlyBlocked(fromX, fromY, toX, toY, size, obstacles) {
+    const half = size / 2;
+    for (const obs of obstacles) {
+      const combined = half + obs.size / 2;
+      const wasOverlapping = Math.abs(fromX - obs.x) < combined && Math.abs(fromY - obs.y) < combined;
+      if (wasOverlapping) continue;
+      const willOverlap = Math.abs(toX - obs.x) < combined && Math.abs(toY - obs.y) < combined;
+      if (willOverlap) return true;
+    }
+    return false;
   }
 
   // 依角色這一幀實際移動的方向切換 left/right/idle 圖片。
@@ -892,6 +934,8 @@ class KitchenScene extends Phaser.Scene {
   }
 
   updateLocalMovement(delta) {
+    // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣——X、Y 軸分開處理,
+    // 某一軸撞到就那一軸不動,另一軸繼續走,貼著障礙物邊緣滑過去才會順。
     if (this.moveTarget) {
       const dx = this.moveTarget.x - this.localPos.x;
       const dy = this.moveTarget.y - this.localPos.y;
@@ -899,20 +943,10 @@ class KitchenScene extends Phaser.Scene {
       const step = MOVE_SPEED * (delta / 1000);
       if (dist > MOVE_ARRIVE_DIST) {
         const moveStep = Math.min(step, dist);
-        this.localPos.x += (dx / dist) * moveStep;
-        this.localPos.y += (dy / dist) * moveStep;
+        const obstacles = this.buildCollisionObstacles(this.role);
+        this.moveAxisSliding(this.localPos, (dx / dist) * moveStep, (dy / dist) * moveStep, PLAYER_SIZE, obstacles);
       }
     }
-
-    // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣。
-    const resolved = this.resolveCollisionAgainstList(
-      this.localPos.x,
-      this.localPos.y,
-      PLAYER_SIZE,
-      this.buildCollisionObstacles(this.role)
-    );
-    this.localPos.x = resolved.x;
-    this.localPos.y = resolved.y;
 
     this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
     this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 30, WORLD_H - 30);
