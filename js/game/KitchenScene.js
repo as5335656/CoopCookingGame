@@ -158,7 +158,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=4.3';
+    const v = '?v=4.4';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -171,6 +171,7 @@ class KitchenScene extends Phaser.Scene {
 
     // 廚具圖示(去背後疊在桌面圖上顯示,見 createEquipmentView)
     this.load.image('equip_pan', 'assets/sprites/pan.png' + v);
+    this.load.image('equip_pan_heating', 'assets/sprites/pan_heating.png' + v);
     this.load.image('equip_cutting_board', 'assets/sprites/cutting_board.png' + v);
     this.load.image('equip_plate', 'assets/sprites/plate.png' + v);
 
@@ -366,7 +367,17 @@ class KitchenScene extends Phaser.Scene {
     parts.push(progressBg, progressBar, heldItemText, heldItemImage, ...plateStackImages, plateStackCountText);
     container.add(parts);
 
-    return { container, bg, outline, hasOwnArt: !!ownArtKey, progressBg, progressBar, heldItemText, heldItemImage, plateStackImages, plateStackCountText, def };
+    return { container, bg, outline, icon, hasOwnArt: !!ownArtKey, progressBg, progressBar, heldItemText, heldItemImage, plateStackImages, plateStackCountText, def };
+  }
+
+  // 平底鍋放了東西進去(不管是正在煮、煮好還是燒焦)要換成「加熱中」的鍋子圖,空鍋時換回原本的圖。
+  setPanIcon(view, heating) {
+    const key = heating ? 'equip_pan_heating' : 'equip_pan';
+    if (!view.icon || view.icon.texture.key === key) return;
+    const src = this.textures.get(key).getSourceImage();
+    const displayW = (view.def.size || 64) * 0.8;
+    const displayH = displayW * (src.height / src.width);
+    view.icon.setTexture(key).setDisplaySize(displayW, displayH);
   }
 
   // 桌子用實際的木紋桌面圖片,食物/飲料會實際「擺在桌面上」而不是用文字泡泡飄在空中。
@@ -1192,6 +1203,7 @@ class KitchenScene extends Phaser.Scene {
       if (!st) continue;
 
       if (st.type === 'cooking') {
+        if (view.def.img === 'equip_pan') this.setPanIcon(view, st.status !== 'idle');
         const cookDef = st.recipeId ? getRecipe(st.recipeId) : COOK_RECIPES[st.cookingItem];
         if (st.status === 'cooking') {
           view.progressBg.setVisible(true);
