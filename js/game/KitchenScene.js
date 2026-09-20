@@ -9,6 +9,7 @@ const ARRIVE_AT_APPROACH_DIST = 16; // 走位判定用:離「站點面前的走�
 const MOVE_ARRIVE_DIST = 4;
 const PLAYER_SIZE = 64; // 角色碰撞用的方形邊長,跟顯示大小一致
 const MOVE_STUCK_TIMEOUT_MS = 2500; // 如果因為碰撞卡住太久走不到目標,直接放行,避免永久卡死
+const EDIT_GRID_SIZE = 8; // 編輯模式拖曳物件時,座標會對齊到這個格線大小,方便排整齊
 
 // 中間走道兩邊都不能穿越,雙方各自鎖在自己的區域,只能靠出餐口交接東西。
 const ZONE_MAX_X = { host: 450, joiner: WORLD_W - 30 };
@@ -148,7 +149,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=3.1';
+    const v = '?v=3.2';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -627,7 +628,10 @@ class KitchenScene extends Phaser.Scene {
 
     this.input.on('drag', (pointer, gameObject, dragX, dragY) => {
       if (this.deleteMode || this.pendingGadgetType) return; // 刪除/放置模式下不要順便被拖走
-      const resolved = this.resolveCollision(gameObject.stationId, dragX, dragY, this.sizes[gameObject.stationId]);
+      // 拖曳座標先對齊到格線,排整齊比較好對位置,不受不規則像素位置影響。
+      const snappedX = Math.round(dragX / EDIT_GRID_SIZE) * EDIT_GRID_SIZE;
+      const snappedY = Math.round(dragY / EDIT_GRID_SIZE) * EDIT_GRID_SIZE;
+      const resolved = this.resolveCollision(gameObject.stationId, snappedX, snappedY, this.sizes[gameObject.stationId]);
       gameObject.x = resolved.x;
       gameObject.y = resolved.y;
     });
