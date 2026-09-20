@@ -158,7 +158,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=4.1';
+    const v = '?v=4.2';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -822,7 +822,17 @@ class KitchenScene extends Phaser.Scene {
     };
 
     document.getElementById('edit-level-label').textContent = '正在編輯:1-' + this.level;
-    document.getElementById('edit-panel').classList.remove('hidden');
+    const editPanel = document.getElementById('edit-panel');
+    editPanel.classList.remove('hidden');
+    editPanel.classList.remove('collapsed');
+
+    const toggleBtn = document.getElementById('btn-toggle-panel');
+    toggleBtn.textContent = '收合 »';
+    toggleBtn.onclick = () => {
+      const collapsed = editPanel.classList.toggle('collapsed');
+      toggleBtn.textContent = collapsed ? '« 展開' : '收合 »';
+    };
+
     this.updateEditOutput();
   }
 

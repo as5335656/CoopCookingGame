@@ -267,6 +267,24 @@ h2 {
   display: none;
 }
 
+/* 收合狀態:面板縮成一顆貼右邊的小按鈕,把畫面右側讓出來,方便拖拉/點擊被擋住的物件(例如出餐口、顧客桌位)。 */
+#edit-panel.collapsed {
+  max-width: 40px;
+  padding: 8px 4px;
+  gap: 0;
+}
+
+#edit-panel.collapsed > *:not(#btn-toggle-panel) {
+  display: none;
+}
+
+.panel-toggle-btn {
+  flex-shrink: 0;
+  padding: 8px 4px;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
 #edit-palette {
   display: flex;
   flex-wrap: wrap;
