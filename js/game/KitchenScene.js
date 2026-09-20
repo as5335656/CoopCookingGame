@@ -5,10 +5,19 @@ const WORLD_W = 960;
 const WORLD_H = 540;
 const MOVE_SPEED = 220; // px/sec
 const INTERACT_RADIUS = 72; // 點擊判定用:離站點多近算是點到它
-const ARRIVE_AT_APPROACH_DIST = 16; // 走位判定用:離「站點面前的走位點」多近算是走到定位、可以觸發互動
-const MOVE_ARRIVE_DIST = 4;
 const PLAYER_SIZE = 64; // 角色碰撞用的方形邊長,跟顯示大小一致
 const EDIT_GRID_SIZE = 8; // 編輯模式拖曳物件時,座標會對齊到這個格線大小,方便排整齊
+
+// 走路用的路徑規劃網格:960/6=160 欄,540/6=90 列(格子要夠細,不然站點旁邊可以站的
+// 「安全環帶」常常只有幾像素寬,粗一點的格子容易整圈都跨不進那條窄環帶裡)。
+// 角色移動不再是「直線走、撞到再閃」,
+// 而是先在這個網格上用 A* 算出一條真正繞開所有站點的路徑,再照著路徑走過去——
+// 不管站點怎麼排、多密集,只要實體上走得過去,就一定找得到路,不會再卡住。
+const GRID_CELL = 6;
+const NEIGHBOR_OFFSETS = [
+  [1, 0], [-1, 0], [0, 1], [0, -1],
+  [1, 1], [1, -1], [-1, 1], [-1, -1]
+];
 
 // 中間走道兩邊都不能穿越,雙方各自鎖在自己的區域,只能靠出餐口交接東西。
 const ZONE_MAX_X = { host: 450, joiner: WORLD_W - 30 };
@@ -149,7 +158,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=3.4';
+    const v = '?v=4.0';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -206,13 +215,15 @@ class KitchenScene extends Phaser.Scene {
 
     loadLevelLayout(this.level);
     this.state = this.isHost ? createInitialState(this.level) : null;
+    this.buildWalkGrid();
 
     this.drawBackground();
     this.createStations();
     this.createPlayers();
 
     this.localPos = { x: PLAYER_SPAWN[this.role].x, y: PLAYER_SPAWN[this.role].y };
-    this.moveTarget = null;
+    this.movePath = null;
+    this.movePathIndex = 0;
     this.pendingInteractStationId = null;
 
     if (this.localTestMode) {
@@ -221,7 +232,8 @@ class KitchenScene extends Phaser.Scene {
         host: { x: PLAYER_SPAWN.host.x, y: PLAYER_SPAWN.host.y },
         joiner: { x: PLAYER_SPAWN.joiner.x, y: PLAYER_SPAWN.joiner.y }
       };
-      this.testMoveTargets = { host: null, joiner: null };
+      this.testMovePaths = { host: null, joiner: null };
+      this.testMovePathIndex = { host: 0, joiner: 0 };
       this.testPendingInteract = { host: null, joiner: null };
       document.getElementById('btn-interact').style.display = 'none';
     }
@@ -414,43 +426,144 @@ class KitchenScene extends Phaser.Scene {
 
   // 點擊物件才會移動(點空地沒有反應),走過去後自動互動。
   // 本機測試模式下,點左半邊操控 P1、點右半邊操控 P2。
-  // 算出站點「面前」的走位目標:從玩家目前所在位置朝站點方向,停在站點邊緣外面,
-  // 而不是直接瞄準站點正中心——瞄準正中心的話,碰撞卡住時最後停下的位置會因為撞到
-  // 的角度亂跑(可能停在站點旁邊任何角度,不是正對著它),放行時甚至會直接疊到站點上面。
-  computeApproachPoint(def, fromX, fromY) {
-    const dx = fromX - def.x;
-    const dy = fromY - def.y;
-    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
-    const standoff = (def.size || 64) / 2 + PLAYER_SIZE / 2;
 
-    const natural = { x: def.x + (dx / dist) * standoff, y: def.y + (dy / dist) * standoff };
-    if (!this.pointConflictsWithOtherStation(natural, def)) return natural;
-
-    // 自然算出來的面前點卡到別的站點時(常見於站點排得比較密的自訂佈局,例如排成一整排/一整列),
-    // 依序試上下左右四個方向,選第一個不會撞到別人的——直排的話上下常常也有鄰居,
-    // 這時候換成試左右通常就空了,反之亦然,所以四個方向都要試,不能只試單一軸。
-    const upDown = { x: def.x, y: def.y + (dy >= 0 ? standoff : -standoff) };
-    const downUp = { x: def.x, y: def.y + (dy >= 0 ? -standoff : standoff) };
-    const sideNear = { x: def.x + (dx >= 0 ? standoff : -standoff), y: def.y };
-    const sideFar = { x: def.x + (dx >= 0 ? -standoff : standoff), y: def.y };
-    const candidates = Math.abs(dy) >= Math.abs(dx)
-      ? [upDown, downUp, sideNear, sideFar]
-      : [sideNear, sideFar, upDown, downUp];
-
-    for (const c of candidates) {
-      if (!this.pointConflictsWithOtherStation(c, def)) return c;
+  // 建立走路用的網格地圖:每一格如果「玩家站在這一格中心」會跟任何站點重疊,就標記成不可走。
+  // 只在關卡載入時算一次(站點在遊戲中不會移動),之後每次點擊移動都重複使用同一份網格。
+  buildWalkGrid() {
+    const cols = Math.floor(WORLD_W / GRID_CELL);
+    const rows = Math.floor(WORLD_H / GRID_CELL);
+    const grid = [];
+    for (let r = 0; r < rows; r++) {
+      const rowArr = new Uint8Array(cols);
+      for (let c = 0; c < cols; c++) {
+        const wx = c * GRID_CELL + GRID_CELL / 2;
+        const wy = r * GRID_CELL + GRID_CELL / 2;
+        // 畫面最上/最下緣留白也算不可走——不然像「整排站點剛好把區域封死」這種情況,
+        // A* 可能會找到一小塊卡在畫面邊緣、跟主要走道完全不連通的空地當成合法目標。
+        if (wy < 30 || wy > WORLD_H - 30) {
+          rowArr[c] = 1;
+          continue;
+        }
+        for (const id in STATION_LAYOUT) {
+          const def = STATION_LAYOUT[id];
+          const half = (def.size || 64) / 2 + PLAYER_SIZE / 2;
+          if (Math.abs(wx - def.x) < half && Math.abs(wy - def.y) < half) {
+            rowArr[c] = 1;
+            break;
+          }
+        }
+      }
+      grid.push(rowArr);
     }
-    return natural; // 四個方向都卡住(極端密集擺放),還是回傳原本算的點,靠卡住放行機制保底
+    this.walkGrid = grid;
+    this.gridCols = cols;
+    this.gridRows = rows;
   }
 
-  pointConflictsWithOtherStation(point, excludeDef) {
-    for (const id in STATION_LAYOUT) {
-      const other = STATION_LAYOUT[id];
-      if (other === excludeDef) continue;
-      const half = PLAYER_SIZE / 2 + (other.size || 64) / 2;
-      if (Math.abs(point.x - other.x) < half && Math.abs(point.y - other.y) < half) return true;
+  gridToWorld(col, row) {
+    return { x: col * GRID_CELL + GRID_CELL / 2, y: row * GRID_CELL + GRID_CELL / 2 };
+  }
+
+  isCellBlocked(col, row, minCol, maxCol) {
+    if (col < minCol || col > maxCol || row < 0 || row >= this.gridRows) return true;
+    return this.walkGrid[row][col] === 1;
+  }
+
+  // 從某一格開始,一圈一圈往外找最近的一個可走格子(用在起點/終點本身剛好是障礙格的情況)。
+  findNearestOpenCell(col, row, minCol, maxCol) {
+    if (!this.isCellBlocked(col, row, minCol, maxCol)) return { col, row };
+    for (let radius = 1; radius <= 60; radius++) {
+      for (let dc = -radius; dc <= radius; dc++) {
+        for (let dr = -radius; dr <= radius; dr++) {
+          if (Math.max(Math.abs(dc), Math.abs(dr)) !== radius) continue;
+          const c = col + dc, r = row + dr;
+          if (!this.isCellBlocked(c, r, minCol, maxCol)) return { col: c, row: r };
+        }
+      }
     }
-    return false;
+    return null;
+  }
+
+  // Dijkstra:從玩家目前位置開始直接往外搜尋,找到「第一個進入站點互動半徑內」的格子就當終點,
+  // 回傳從起點到那個格子的完整路徑(世界座標)。
+  //
+  // 這裡刻意不是「先在站點旁邊找一個看起來最近的空格,再算路徑過去」——那樣找到的空格可能剛好
+  // 在地圖上一塊跟玩家完全不連通的死角裡(例如被其他站點包住),導致路徑怎麼算都算不出來。
+  // 用 Dijkstra 從玩家「實際位置」開始展開搜尋,保證只要能找到符合條件的格子,那個格子一定是
+  // 走得到的,因為就是沿著這條搜尋展開的路徑走過去的。
+  planPathToStation(def, fromX, fromY, role) {
+    const minCol = Math.ceil(ZONE_MIN_X[role] / GRID_CELL);
+    const maxCol = Math.floor(ZONE_MAX_X[role] / GRID_CELL) - 1;
+
+    let startCol = Phaser.Math.Clamp(Math.floor(fromX / GRID_CELL), minCol, maxCol);
+    let startRow = Phaser.Math.Clamp(Math.floor(fromY / GRID_CELL), 0, this.gridRows - 1);
+    if (this.isCellBlocked(startCol, startRow, minCol, maxCol)) {
+      const open = this.findNearestOpenCell(startCol, startRow, minCol, maxCol);
+      if (!open) return null;
+      startCol = open.col;
+      startRow = open.row;
+    }
+
+    const distToStation = (c, r) => {
+      const wp = this.gridToWorld(c, r);
+      return Phaser.Math.Distance.Between(wp.x, wp.y, def.x, def.y);
+    };
+    if (distToStation(startCol, startRow) <= INTERACT_RADIUS) {
+      return [this.gridToWorld(startCol, startRow)];
+    }
+
+    // 啟發函數:離「互動半徑邊界」還差多遠(格數),再怎麼走都不可能比這個更快抵達,
+    // 所以這個估計值不會高估實際距離,可以放心拿來當 A* 的啟發函數用,引導搜尋往站點方向優先展開。
+    const heuristic = (c, r) => Math.max(0, distToStation(c, r) - INTERACT_RADIUS) / GRID_CELL;
+
+    const key = (c, r) => r * this.gridCols + c;
+    const startKey = key(startCol, startRow);
+    const open = [{ col: startCol, row: startRow, g: 0, f: heuristic(startCol, startRow) }];
+    const gScore = new Map([[startKey, 0]]);
+    const cameFrom = new Map();
+    const closed = new Set();
+
+    while (open.length > 0) {
+      let bestIdx = 0;
+      for (let i = 1; i < open.length; i++) {
+        if (open[i].f < open[bestIdx].f) bestIdx = i;
+      }
+      const current = open.splice(bestIdx, 1)[0];
+      const ck = key(current.col, current.row);
+      if (closed.has(ck)) continue;
+      closed.add(ck);
+
+      if (distToStation(current.col, current.row) <= INTERACT_RADIUS) {
+        const cells = [];
+        let node = ck;
+        while (cameFrom.has(node)) {
+          cells.push({ col: node % this.gridCols, row: Math.floor(node / this.gridCols) });
+          node = cameFrom.get(node);
+        }
+        cells.push({ col: startCol, row: startRow });
+        cells.reverse();
+        return cells.map((cell) => this.gridToWorld(cell.col, cell.row));
+      }
+
+      for (const [dc, dr] of NEIGHBOR_OFFSETS) {
+        const nc = current.col + dc, nr = current.row + dr;
+        if (this.isCellBlocked(nc, nr, minCol, maxCol)) continue;
+        // 對角移動時,兩側的正交格子也要是空的,不然會貼著障礙物的角落穿過去。
+        if (dc !== 0 && dr !== 0) {
+          if (this.isCellBlocked(current.col + dc, current.row, minCol, maxCol)) continue;
+          if (this.isCellBlocked(current.col, current.row + dr, minCol, maxCol)) continue;
+        }
+        const stepCost = (dc !== 0 && dr !== 0) ? Math.SQRT2 : 1;
+        const tentativeG = current.g + stepCost;
+        const nk = key(nc, nr);
+        if (!gScore.has(nk) || tentativeG < gScore.get(nk)) {
+          gScore.set(nk, tentativeG);
+          cameFrom.set(nk, ck);
+          open.push({ col: nc, row: nr, g: tentativeG, f: tentativeG + heuristic(nc, nr) });
+        }
+      }
+    }
+    return null; // 從玩家目前位置出發,完全走不到這個站點互動範圍內的任何一格
   }
 
   setupTapToMove() {
@@ -464,13 +577,12 @@ class KitchenScene extends Phaser.Scene {
         if (!stationId) return; // 點到空地不移動
 
         const def = STATION_LAYOUT[stationId];
-        const approach = this.computeApproachPoint(def, this.localPos.x, this.localPos.y);
-        const targetX = Phaser.Math.Clamp(approach.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
-        const targetY = Phaser.Math.Clamp(approach.y, 30, WORLD_H - 30);
-        this.moveTarget = { x: targetX, y: targetY };
+        const path = this.planPathToStation(def, this.localPos.x, this.localPos.y, this.role);
+        if (!path) return; // 理論上不該發生(完全被封死走不到)
+        this.movePath = path;
+        this.movePathIndex = 0;
         this.pendingInteractStationId = stationId;
-        // 點擊動畫要顯示在「點到的那個物件」本身位置,不是走位目標點(那兩個點常常不一樣,
-        // 尤其走位目標為了閃開旁邊的站點被移到上方/下方時,動畫顯示在那裡會讓人以為點錯地方)。
+        // 點擊動畫顯示在「點到的那個物件」本身位置,不是走位路徑上的點。
         this.showTapMarker(def.x, def.y);
       }
     });
@@ -482,12 +594,11 @@ class KitchenScene extends Phaser.Scene {
 
     const def = STATION_LAYOUT[stationId];
     const fromPos = this.testPositions[role];
-    const approach = this.computeApproachPoint(def, fromPos.x, fromPos.y);
-    const targetX = Phaser.Math.Clamp(approach.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
-    const targetY = Phaser.Math.Clamp(approach.y, 30, WORLD_H - 30);
-    this.testMoveTargets[role] = { x: targetX, y: targetY };
+    const path = this.planPathToStation(def, fromPos.x, fromPos.y, role);
+    if (!path) return;
+    this.testMovePaths[role] = path;
+    this.testMovePathIndex[role] = 0;
     this.testPendingInteract[role] = stationId;
-    // 同上,動畫顯示在點到的物件本身位置,不是走位目標點。
     this.showTapMarker(def.x, def.y);
   }
 
@@ -496,30 +607,16 @@ class KitchenScene extends Phaser.Scene {
 
     for (const role of ['host', 'joiner']) {
       const pos = this.testPositions[role];
-      const target = this.testMoveTargets[role];
+      const path = this.testMovePaths[role];
 
-      // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣——X、Y 軸分開處理,
-      // 某一軸撞到就那一軸不動,另一軸繼續走,貼著障礙物邊緣滑過去才會順。
-      if (target) {
-        const dx = target.x - pos.x;
-        const dy = target.y - pos.y;
-        const dist = Math.sqrt(dx * dx + dy * dy);
-        if (dist > MOVE_ARRIVE_DIST) {
-          const moveStep = Math.min(step, dist);
-          const obstacles = this.buildCollisionObstacles(role);
-          this.moveAxisSliding(pos, (dx / dist) * moveStep, (dy / dist) * moveStep, PLAYER_SIZE, obstacles);
-        }
-      }
+      if (path) {
+        const otherRole = role === 'host' ? 'joiner' : 'host';
+        const otherPos = this.testPositions[otherRole];
+        const newIndex = this.advanceAlongPath(pos, path, this.testMovePathIndex[role], step, otherPos);
+        this.testMovePathIndex[role] = newIndex;
 
-      pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
-      pos.y = Phaser.Math.Clamp(pos.y, 30, WORLD_H - 30);
-
-      // target 是「站點面前的走位點」(見 computeApproachPoint),不是站點正中心,
-      // 正常情況下碰撞會讓角色剛好停在那個點附近,所以用比較嚴格的距離判斷有沒有走到位。
-      if (target) {
-        const distToTarget = Phaser.Math.Distance.Between(pos.x, pos.y, target.x, target.y);
-        if (distToTarget <= ARRIVE_AT_APPROACH_DIST) {
-          this.testMoveTargets[role] = null;
+        if (newIndex >= path.length) {
+          this.testMovePaths[role] = null;
           const stationId = this.testPendingInteract[role];
           if (stationId) {
             interactStation(this.state, stationId, role);
@@ -527,6 +624,9 @@ class KitchenScene extends Phaser.Scene {
           }
         }
       }
+
+      pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
+      pos.y = Phaser.Math.Clamp(pos.y, 30, WORLD_H - 30);
 
       const sprite = this.playerSprites[role];
       sprite.container.setPosition(pos.x, pos.y);
@@ -536,18 +636,41 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
-  // 收集「這個角色」目前應該要避免重疊的東西:所有站點 + 另一位玩家。
-  buildCollisionObstacles(selfRole) {
-    const obstacles = [];
-    for (const id in this.stationSprites) {
-      const view = this.stationSprites[id];
-      const size = (view.def && view.def.size) || (view.isTable ? 68 : 64);
-      obstacles.push({ x: view.container.x, y: view.container.y, size });
+  // 沿著已經算好的網格路徑走一幀的距離。path 是世界座標的路徑點陣列,fromIndex 是目前走到第幾個點。
+  // 回傳走完這一幀之後的新索引(呼叫端自己存起來,下一幀繼續從這個索引往後走)。
+  // 路徑本身只保證繞開所有站點(建網格的時候就排除了),另一位玩家是即時移動的動態物件、
+  // 沒有算進網格地圖,所以這裡額外做一個輕量的推開,避免兩個角色疊在一起就好,
+  // 不需要為了另一位玩家重新規劃路徑。
+  advanceAlongPath(pos, path, fromIndex, moveStep, otherPos) {
+    let index = fromIndex;
+    let remaining = moveStep;
+    while (remaining > 0 && index < path.length) {
+      const wp = path[index];
+      const dx = wp.x - pos.x;
+      const dy = wp.y - pos.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist <= remaining) {
+        pos.x = wp.x;
+        pos.y = wp.y;
+        remaining -= dist;
+        index++;
+      } else {
+        pos.x += (dx / dist) * remaining;
+        pos.y += (dy / dist) * remaining;
+        remaining = 0;
+      }
     }
-    const otherRole = selfRole === 'host' ? 'joiner' : 'host';
-    const other = this.playerSprites[otherRole];
-    obstacles.push({ x: other.x, y: other.y, size: PLAYER_SIZE });
-    return obstacles;
+    if (otherPos) {
+      const dx = pos.x - otherPos.x;
+      const dy = pos.y - otherPos.y;
+      const dist = Math.hypot(dx, dy);
+      if (dist > 0 && dist < PLAYER_SIZE) {
+        const push = PLAYER_SIZE - dist;
+        pos.x += (dx / dist) * push;
+        pos.y += (dy / dist) * push;
+      }
+    }
+    return index;
   }
 
   // 通用的方形碰撞解算:如果 (x,y) 跟清單裡任何一個障礙物重疊,
@@ -570,50 +693,6 @@ class KitchenScene extends Phaser.Scene {
       }
     }
     return { x, y };
-  }
-
-  // (x,y) 這個位置會不會跟清單裡任何一個障礙物重疊,只回答是非,不做推開。
-  collidesWithAny(x, y, size, obstacles) {
-    const halfA = size / 2;
-    for (const obs of obstacles) {
-      const halfB = obs.size / 2;
-      if (Math.abs(x - obs.x) < halfA + halfB && Math.abs(y - obs.y) < halfA + halfB) return true;
-    }
-    return false;
-  }
-
-  // 玩家走位專用:X 軸、Y 軸各自獨立嘗試移動、各自獨立檢查會不會撞到障礙物——
-  // 撞到的那一軸這一幀就不動,另一軸不受影響照常走。這樣角色貼著障礙物邊緣走的時候
-  // 是自然地「滑」過去,不會像「先整個往目標方向移動、撞到了才整份推開」那樣,
-  // 每一幀都把剛移動的一點點距離推回原地、卡在原地抖動走不動。
-  moveAxisSliding(pos, moveX, moveY, size, obstacles) {
-    if (moveX !== 0) {
-      const tryX = pos.x + moveX;
-      if (!this.newlyBlocked(pos.x, pos.y, tryX, pos.y, size, obstacles)) {
-        pos.x = tryX;
-      }
-    }
-    if (moveY !== 0) {
-      const tryY = pos.y + moveY;
-      if (!this.newlyBlocked(pos.x, pos.y, pos.x, tryY, size, obstacles)) {
-        pos.y = tryY;
-      }
-    }
-  }
-
-  // 只有「移動後」才跟某個障礙物重疊、而「移動前」沒有跟它重疊,才算被那個障礙物擋住。
-  // 如果起點本來就已經跟某個障礙物重疊(例如硬擠進兩個障礙物中間的窄縫、或卡住放行後
-  // 剛好落在邊界上),不能讓玩家因為「已經在裡面」就完全動彈不得——至少要放行讓他離開。
-  newlyBlocked(fromX, fromY, toX, toY, size, obstacles) {
-    const half = size / 2;
-    for (const obs of obstacles) {
-      const combined = half + obs.size / 2;
-      const wasOverlapping = Math.abs(fromX - obs.x) < combined && Math.abs(fromY - obs.y) < combined;
-      if (wasOverlapping) continue;
-      const willOverlap = Math.abs(toX - obs.x) < combined && Math.abs(toY - obs.y) < combined;
-      if (willOverlap) return true;
-    }
-    return false;
   }
 
   // 依角色這一幀實際移動的方向切換 left/right/idle 圖片。
@@ -923,29 +1002,14 @@ class KitchenScene extends Phaser.Scene {
   }
 
   updateLocalMovement(delta) {
-    // 跟站點、跟另一位玩家都不能重疊,撞到會卡在邊緣——X、Y 軸分開處理,
-    // 某一軸撞到就那一軸不動,另一軸繼續走,貼著障礙物邊緣滑過去才會順。
-    if (this.moveTarget) {
-      const dx = this.moveTarget.x - this.localPos.x;
-      const dy = this.moveTarget.y - this.localPos.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
+    if (this.movePath) {
       const step = MOVE_SPEED * (delta / 1000);
-      if (dist > MOVE_ARRIVE_DIST) {
-        const moveStep = Math.min(step, dist);
-        const obstacles = this.buildCollisionObstacles(this.role);
-        this.moveAxisSliding(this.localPos, (dx / dist) * moveStep, (dy / dist) * moveStep, PLAYER_SIZE, obstacles);
-      }
-    }
+      const remote = this.playerSprites[this.remoteRole];
+      const newIndex = this.advanceAlongPath(this.localPos, this.movePath, this.movePathIndex, step, remote);
+      this.movePathIndex = newIndex;
 
-    this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
-    this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 30, WORLD_H - 30);
-
-    // target 是「站點面前的走位點」(見 computeApproachPoint),不是站點正中心,
-    // 正常情況下碰撞會讓角色剛好停在那個點附近,所以用比較嚴格的距離判斷有沒有走到位。
-    if (this.moveTarget) {
-      const distToTarget = Phaser.Math.Distance.Between(this.localPos.x, this.localPos.y, this.moveTarget.x, this.moveTarget.y);
-      if (distToTarget <= ARRIVE_AT_APPROACH_DIST) {
-        this.moveTarget = null;
+      if (newIndex >= this.movePath.length) {
+        this.movePath = null;
         if (this.pendingInteractStationId) {
           const stationId = this.pendingInteractStationId;
           this.pendingInteractStationId = null;
@@ -957,6 +1021,9 @@ class KitchenScene extends Phaser.Scene {
         }
       }
     }
+
+    this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
+    this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 30, WORLD_H - 30);
 
     const mySprite = this.playerSprites[this.role];
     mySprite.container.setPosition(this.localPos.x, this.localPos.y);
