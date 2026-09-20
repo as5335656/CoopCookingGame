@@ -148,7 +148,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=3.0';
+    const v = '?v=3.1';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -423,16 +423,25 @@ class KitchenScene extends Phaser.Scene {
     const dy = fromY - def.y;
     const dist = Math.sqrt(dx * dx + dy * dy) || 1;
     const standoff = (def.size || 64) / 2 + PLAYER_SIZE / 2;
-    const point = { x: def.x + (dx / dist) * standoff, y: def.y + (dy / dist) * standoff };
 
-    // 這個「面前的點」如果剛好卡進旁邊其他站點的碰撞範圍(常見於同一排站點排得比較密的情況),
-    // 改成從正上方或正下方(看玩家原本在哪一側)靠近,通常比較不會撞到左右兩側的鄰居。
-    if (this.pointConflictsWithOtherStation(point, def)) {
-      const vertical = dy >= 0 ? 1 : -1;
-      const fallback = { x: def.x, y: def.y + vertical * standoff };
-      if (!this.pointConflictsWithOtherStation(fallback, def)) return fallback;
+    const natural = { x: def.x + (dx / dist) * standoff, y: def.y + (dy / dist) * standoff };
+    if (!this.pointConflictsWithOtherStation(natural, def)) return natural;
+
+    // 自然算出來的面前點卡到別的站點時(常見於站點排得比較密的自訂佈局,例如排成一整排/一整列),
+    // 依序試上下左右四個方向,選第一個不會撞到別人的——直排的話上下常常也有鄰居,
+    // 這時候換成試左右通常就空了,反之亦然,所以四個方向都要試,不能只試單一軸。
+    const upDown = { x: def.x, y: def.y + (dy >= 0 ? standoff : -standoff) };
+    const downUp = { x: def.x, y: def.y + (dy >= 0 ? -standoff : standoff) };
+    const sideNear = { x: def.x + (dx >= 0 ? standoff : -standoff), y: def.y };
+    const sideFar = { x: def.x + (dx >= 0 ? -standoff : standoff), y: def.y };
+    const candidates = Math.abs(dy) >= Math.abs(dx)
+      ? [upDown, downUp, sideNear, sideFar]
+      : [sideNear, sideFar, upDown, downUp];
+
+    for (const c of candidates) {
+      if (!this.pointConflictsWithOtherStation(c, def)) return c;
     }
-    return point;
+    return natural; // 四個方向都卡住(極端密集擺放),還是回傳原本算的點,靠卡住放行機制保底
   }
 
   pointConflictsWithOtherStation(point, excludeDef) {
@@ -462,7 +471,9 @@ class KitchenScene extends Phaser.Scene {
         this.moveTarget = { x: targetX, y: targetY };
         this.pendingInteractStationId = stationId;
         this.moveStartTime = performance.now();
-        this.showTapMarker(targetX, targetY);
+        // 點擊動畫要顯示在「點到的那個物件」本身位置,不是走位目標點(那兩個點常常不一樣,
+        // 尤其走位目標為了閃開旁邊的站點被移到上方/下方時,動畫顯示在那裡會讓人以為點錯地方)。
+        this.showTapMarker(def.x, def.y);
       }
     });
   }
@@ -479,7 +490,8 @@ class KitchenScene extends Phaser.Scene {
     this.testMoveTargets[role] = { x: targetX, y: targetY };
     this.testPendingInteract[role] = stationId;
     this.testMoveStartTime[role] = performance.now();
-    this.showTapMarker(targetX, targetY);
+    // 同上,動畫顯示在點到的物件本身位置,不是走位目標點。
+    this.showTapMarker(def.x, def.y);
   }
 
   updateLocalTestMode(delta) {
