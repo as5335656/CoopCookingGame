@@ -32,15 +32,25 @@ const RECIPES = {
   burger_beef_tomato: { id: 'burger_beef_tomato', name: '牛肉番茄堡', platedItem: 'burger_beef_tomato', ingredients: ['beef_cooked', 'lettuce', 'tomato_sliced', 'bun'] },
   burger_chicken_cheese: { id: 'burger_chicken_cheese', name: '雞肉吉士堡', platedItem: 'burger_chicken_cheese', ingredients: ['chicken_cooked', 'cheese', 'lettuce', 'bun'] },
   burger_chicken: { id: 'burger_chicken', name: '雞肉堡', platedItem: 'burger_chicken', ingredients: ['chicken_cooked', 'lettuce', 'bun'] },
-  burger_chicken_tomato: { id: 'burger_chicken_tomato', name: '雞肉番茄堡', platedItem: 'burger_chicken_tomato', ingredients: ['chicken_cooked', 'lettuce', 'tomato_sliced', 'bun'] }
+  burger_chicken_tomato: { id: 'burger_chicken_tomato', name: '雞肉番茄堡', platedItem: 'burger_chicken_tomato', ingredients: ['chicken_cooked', 'lettuce', 'tomato_sliced', 'bun'] },
+
+  // 單一食材就能端走的簡化菜色(不用夾麵包/配料),給比較早、比較簡單的關卡用。
+  plate_beef: { id: 'plate_beef', name: '熟牛肉', platedItem: 'beef_cooked', ingredients: ['beef_cooked'] },
+  plate_chicken: { id: 'plate_chicken', name: '熟雞肉', platedItem: 'chicken_cooked', ingredients: ['chicken_cooked'] }
 };
 
 const RECIPE_LIST = Object.values(RECIPES);
 
+function getRecipeList(allowedIds) {
+  if (!allowedIds) return RECIPE_LIST;
+  return RECIPE_LIST.filter((r) => allowedIds.includes(r.id));
+}
+
 // 每一關可以出的訂單種類。沒列在這裡的關卡先沿用預設(薯條+飲料),
 // 之後要客製化其他關卡的菜色,在這裡加一筆對應的關卡編號就好。
+// 1-1 先出簡單的「熟牛肉/熟雞肉」(不用組合),漢堡類(夾生菜/起士/番茄/麵包)留給之後比較難的關卡用。
 const LEVEL_RECIPE_IDS = {
-  1: ['burger_beef_cheese', 'burger_beef', 'burger_beef_tomato', 'burger_chicken_cheese', 'burger_chicken', 'burger_chicken_tomato'],
+  1: ['plate_beef', 'plate_chicken'],
   default: ['fries', 'drink']
 };
 
@@ -63,10 +73,6 @@ function getRecipe(id) {
   return RECIPES[id] || null;
 }
 
-function getRecipeByPlatedItem(itemType) {
-  return RECIPE_LIST.find((r) => r.platedItem === itemType) || null;
-}
-
 function getRecipeByRawItem(itemType) {
   return RECIPE_LIST.find((r) => r.rawItem === itemType) || null;
 }
@@ -75,23 +81,25 @@ function getRecipeByCookedItem(itemType) {
   return RECIPE_LIST.find((r) => r.cookedItem === itemType) || null;
 }
 
-// 給一組食材(順序不重要),找出「完全符合」的組合類食譜(缺一樣或多一樣都不算)。
-function findDishByIngredients(items) {
-  const sorted = [...items].sort();
-  return RECIPE_LIST.find((r) => {
-    if (!r.ingredients) return false;
-    const need = [...r.ingredients].sort();
-    return need.length === sorted.length && need.every((v, i) => v === sorted[i]);
-  }) || null;
+// 盤子裡目前裝的這一包食材(順序不重要),內容是否跟某份食譜的食材清單「完全一樣」
+// (不多不少)。只在送餐那一刻拿玩家手上的盤子內容去跟客人這桌指定的那份食譜比對,
+// 用意是「湊到哪一步都還是同一個盤子物件,由送餐當下的比對結果決定端出去算哪道菜」,
+// 這樣同一關才能同時有「單一食材就算完成」跟「要湊好幾樣才算完成」的食譜並存,不會
+// 因為湊到某個中繼狀態就被提早鎖定成別的菜(例如熟牛肉是簡單菜色,但也是漢堡的半成品)。
+function itemsMatchIngredients(items, ingredients) {
+  if (!ingredients || items.length !== ingredients.length) return false;
+  const sortedItems = [...items].sort();
+  const sortedNeed = [...ingredients].sort();
+  return sortedItems.every((v, i) => v === sortedNeed[i]);
 }
 
 // 目前這組食材(還沒放新的這樣之前)+ 要新加進去的這一樣,加了之後是不是還「有機會」
 // 湊出某一份組合類食譜(也就是新食材必須是某份食譜還缺的東西之一)。
 // 這就是「生牛肉不能跟起士放在一起」的規則來源:因為所有食譜的食材清單裡都只有
 // 熟牛肉、沒有生牛肉,生牛肉不管跟什麼放在一起都不會符合任何食譜,一律擋下。
-function canAddIngredientToPlate(currentItems, newItem) {
+function canAddIngredientToPlate(currentItems, newItem, allowedIds) {
   const next = [...currentItems, newItem].sort();
-  return RECIPE_LIST.some((r) => {
+  return getRecipeList(allowedIds).some((r) => {
     if (!r.ingredients) return false;
     const need = [...r.ingredients].sort();
     if (next.length > need.length) return false;

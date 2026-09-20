@@ -4,8 +4,9 @@
 //
 // player.carrying 有三種可能:
 //   null                                空手
-//   字串(例如 'beef_raw' / 'fries_plated')  拿著單一一樣東西(食材或已完成的成品)
-//   { isPlate: true, items: [...] }      拿著一個「正在組合中」的盤子(漢堡類多食材食譜用)
+//   字串(例如 'beef_raw' / 'fries_plated')  拿著單一一樣東西(食材,或不需要盤子的單一食材成品如薯條/飲料)
+//   { isPlate: true, items: [...] }      拿著一個盤子(組合類食譜用,不管湊了幾樣都是這個狀態,
+//                                         算哪道菜留到送餐給客人那一刻才判定,見 itemsMatchIngredients)
 
 // 嘗試把一樣東西交給玩家:空手就直接拿;拿著盤子就試著加進盤子(不符合食譜規則會被擋下);
 // 手上已經拿著別的單一物品則不能再拿。回傳 true/false 代表這次有沒有成功拿到。
@@ -13,20 +14,15 @@ function canReceiveItem(player) {
   return !player.carrying || (typeof player.carrying === 'object' && player.carrying.isPlate);
 }
 
-function tryGiveItemToPlayer(player, itemType) {
+function tryGiveItemToPlayer(player, itemType, allowedIds) {
   if (!player.carrying) {
     player.carrying = itemType;
     return true;
   }
   if (typeof player.carrying === 'object' && player.carrying.isPlate) {
-    if (!canAddIngredientToPlate(player.carrying.items, itemType)) return false;
-    const nextItems = player.carrying.items.concat([itemType]);
-    const dish = findDishByIngredients(nextItems);
-    if (dish) {
-      player.carrying = dish.platedItem; // 湊滿了,盤子變成端得出去的成品
-    } else {
-      player.carrying.items = nextItems;
-    }
+    if (!canAddIngredientToPlate(player.carrying.items, itemType, allowedIds)) return false;
+    // 湊到哪一步都還是同一個盤子,算哪道菜留到送餐時才判定(見 itemsMatchIngredients)。
+    player.carrying.items.push(itemType);
     return true;
   }
   return false;
@@ -39,7 +35,7 @@ function interactStation(state, stationId, role) {
 
   switch (st.type) {
     case 'ingredient_source':
-      tryGiveItemToPlayer(player, st.itemType);
+      tryGiveItemToPlayer(player, st.itemType, state.recipeIds);
       break;
 
     case 'cooking': {
@@ -63,7 +59,7 @@ function interactStation(state, stationId, role) {
           }
         }
       } else if (st.status === 'done' && canReceiveItem(player)) {
-        if (tryGiveItemToPlayer(player, st.itemHeld)) {
+        if (tryGiveItemToPlayer(player, st.itemHeld, state.recipeIds)) {
           st.itemHeld = null;
           st.status = 'idle';
           st.progress = 0;
@@ -91,7 +87,7 @@ function interactStation(state, stationId, role) {
           player.carrying = null;
         }
       } else if (st.status === 'done' && canReceiveItem(player)) {
-        if (tryGiveItemToPlayer(player, st.itemHeld)) {
+        if (tryGiveItemToPlayer(player, st.itemHeld, state.recipeIds)) {
           st.itemHeld = null;
           st.status = 'idle';
           st.progress = 0;
@@ -109,8 +105,8 @@ function interactStation(state, stationId, role) {
         if (recipe && recipe.needsPlate) {
           // 舊版:單一食材食譜(例如薯條),直接轉成可端出去的成品
           player.carrying = recipe.platedItem;
-        } else if (canAddIngredientToPlate([], player.carrying)) {
-          // 新版:手上單一食材開始組合成漢堡類食譜,直接連盤子一起拿起來
+        } else if (canAddIngredientToPlate([], player.carrying, state.recipeIds)) {
+          // 手上單一食材開始組合,先一律連盤子一起拿起來,算哪道菜留到送餐時才判定
           player.carrying = { isPlate: true, items: [player.carrying] };
         }
       }
@@ -154,16 +150,24 @@ function interactStation(state, stationId, role) {
       break;
 
     case 'table': {
-      if (st.occupied && typeof player.carrying === 'string') {
-        const recipe = getRecipeByPlatedItem(player.carrying);
-        if (recipe && recipe.id === st.recipeId) {
-          state.score += SCORE_PER_DISH;
-          player.carrying = null;
-          st.occupied = false;
-          st.recipeId = null;
-          st.patience = 0;
-          st.maxPatience = 0;
-        }
+      if (!st.occupied) break;
+      const recipe = getRecipe(st.recipeId);
+      if (!recipe) break;
+
+      // 組合類食譜(有 ingredients):要拿著盤子,而且盤子內容跟食譜完全一致才算對。
+      // 單一食材食譜(例如薯條/飲料,沒有 ingredients):直接比對手上的成品字串。
+      const matches = recipe.ingredients
+        ? typeof player.carrying === 'object' && player.carrying.isPlate
+          && itemsMatchIngredients(player.carrying.items, recipe.ingredients)
+        : player.carrying === recipe.platedItem;
+
+      if (matches) {
+        state.score += SCORE_PER_DISH;
+        player.carrying = null;
+        st.occupied = false;
+        st.recipeId = null;
+        st.patience = 0;
+        st.maxPatience = 0;
       }
       break;
     }
