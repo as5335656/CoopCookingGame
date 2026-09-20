@@ -4,7 +4,8 @@
 const WORLD_W = 960;
 const WORLD_H = 540;
 const MOVE_SPEED = 220; // px/sec
-const INTERACT_RADIUS = 72;
+const INTERACT_RADIUS = 72; // 點擊判定用:離站點多近算是點到它
+const ARRIVE_AT_APPROACH_DIST = 16; // 走位判定用:離「站點面前的走位點」多近算是走到定位、可以觸發互動
 const MOVE_ARRIVE_DIST = 4;
 const PLAYER_SIZE = 64; // 角色碰撞用的方形邊長,跟顯示大小一致
 const MOVE_STUCK_TIMEOUT_MS = 2500; // 如果因為碰撞卡住太久走不到目標,直接放行,避免永久卡死
@@ -40,11 +41,11 @@ const LEVEL_1_LAYOUT = {
   src_tomato: { x: 230, y: 90, type: 'ingredient_source', itemType: 'tomato_raw', label: '番茄', size: 64 },
   src_lettuce: { x: 310, y: 90, type: 'ingredient_source', itemType: 'lettuce', label: '生菜', size: 64 },
   src_cheese: { x: 390, y: 90, type: 'ingredient_source', itemType: 'cheese', label: '起士', size: 64 },
-  src_bun: { x: 70, y: 220, type: 'ingredient_source', itemType: 'bun', label: '漢堡', size: 64 },
-  pan_1: { x: 160, y: 220, type: 'cooking', img: 'equip_pan', label: '平底鍋', size: 72 },
-  cutting_board_1: { x: 260, y: 220, type: 'cutting', img: 'equip_cutting_board', label: '鉆板', size: 72 },
-  plate_stack: { x: 350, y: 220, type: 'plate_stack', img: 'equip_plate', label: '取盤', size: 64 },
-  trash_bin: { x: 250, y: 340, type: 'trash', emoji: '🗑️', label: '垃圾桶', size: 64 },
+  src_bun: { x: 70, y: 245, type: 'ingredient_source', itemType: 'bun', label: '漢堡', size: 64 },
+  pan_1: { x: 185, y: 245, type: 'cooking', img: 'equip_pan', label: '平底鍋', size: 72 },
+  cutting_board_1: { x: 300, y: 245, type: 'cutting', img: 'equip_cutting_board', label: '鉆板', size: 72 },
+  plate_stack: { x: 410, y: 245, type: 'plate_stack', img: 'equip_plate', label: '取盤', size: 64 },
+  trash_bin: { x: 250, y: 365, type: 'trash', emoji: '🗑️', label: '垃圾桶', size: 64 },
   pass_window: { x: 480, y: 300, type: 'pass_window', emoji: '🛎️', label: '出餐口', size: 72 },
 
   table_1: { x: 610, y: 100, type: 'table', customerEmoji: '🐼', label: '桌位1', size: 72 },
@@ -147,7 +148,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=2.8';
+    const v = '?v=2.9';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -328,9 +329,9 @@ class KitchenScene extends Phaser.Scene {
     // 盤子疊放用:最多視覺上疊 4 層(每層往上偏移一點),超過 4 個就在最上面顯示總數字。
     const plateStackImages = [];
     for (let i = 0; i < 4; i++) {
-      plateStackImages.push(this.add.image(0, -30 - i * 6, 'equip_plate').setDisplaySize(32, 32).setVisible(false));
+      plateStackImages.push(this.add.image(0, -16 - i * 13, 'equip_plate').setDisplaySize(36, 36).setVisible(false));
     }
-    const plateStackCountText = this.add.text(14, -46, '', { fontSize: '13px', color: '#ffffff', fontStyle: 'bold', backgroundColor: '#00000080' }).setOrigin(0.5).setVisible(false);
+    const plateStackCountText = this.add.text(18, -55, '', { fontSize: '13px', color: '#ffffff', fontStyle: 'bold', backgroundColor: '#00000080' }).setOrigin(0.5).setVisible(false);
 
     // icon(廚具/材料箱圖示)要先疊上去,heldItemImage(鍋子裡煮的東西)才會蓋在它上面看得到,
     // 不然像平底鍋這種食材要疊在圖示中央的情況,廚具圖示會蓋住食材。
@@ -414,6 +415,36 @@ class KitchenScene extends Phaser.Scene {
 
   // 點擊物件才會移動(點空地沒有反應),走過去後自動互動。
   // 本機測試模式下,點左半邊操控 P1、點右半邊操控 P2。
+  // 算出站點「面前」的走位目標:從玩家目前所在位置朝站點方向,停在站點邊緣外面,
+  // 而不是直接瞄準站點正中心——瞄準正中心的話,碰撞卡住時最後停下的位置會因為撞到
+  // 的角度亂跑(可能停在站點旁邊任何角度,不是正對著它),放行時甚至會直接疊到站點上面。
+  computeApproachPoint(def, fromX, fromY) {
+    const dx = fromX - def.x;
+    const dy = fromY - def.y;
+    const dist = Math.sqrt(dx * dx + dy * dy) || 1;
+    const standoff = (def.size || 64) / 2 + PLAYER_SIZE / 2;
+    const point = { x: def.x + (dx / dist) * standoff, y: def.y + (dy / dist) * standoff };
+
+    // 這個「面前的點」如果剛好卡進旁邊其他站點的碰撞範圍(常見於同一排站點排得比較密的情況),
+    // 改成從正上方或正下方(看玩家原本在哪一側)靠近,通常比較不會撞到左右兩側的鄰居。
+    if (this.pointConflictsWithOtherStation(point, def)) {
+      const vertical = dy >= 0 ? 1 : -1;
+      const fallback = { x: def.x, y: def.y + vertical * standoff };
+      if (!this.pointConflictsWithOtherStation(fallback, def)) return fallback;
+    }
+    return point;
+  }
+
+  pointConflictsWithOtherStation(point, excludeDef) {
+    for (const id in STATION_LAYOUT) {
+      const other = STATION_LAYOUT[id];
+      if (other === excludeDef) continue;
+      const half = PLAYER_SIZE / 2 + (other.size || 64) / 2;
+      if (Math.abs(point.x - other.x) < half && Math.abs(point.y - other.y) < half) return true;
+    }
+    return false;
+  }
+
   setupTapToMove() {
     this.input.on('pointerdown', (pointer) => {
       if (this.localTestMode) {
@@ -425,8 +456,9 @@ class KitchenScene extends Phaser.Scene {
         if (!stationId) return; // 點到空地不移動
 
         const def = STATION_LAYOUT[stationId];
-        const targetX = Phaser.Math.Clamp(def.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
-        const targetY = Phaser.Math.Clamp(def.y, 30, WORLD_H - 30);
+        const approach = this.computeApproachPoint(def, this.localPos.x, this.localPos.y);
+        const targetX = Phaser.Math.Clamp(approach.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
+        const targetY = Phaser.Math.Clamp(approach.y, 30, WORLD_H - 30);
         this.moveTarget = { x: targetX, y: targetY };
         this.pendingInteractStationId = stationId;
         this.moveStartTime = performance.now();
@@ -440,8 +472,10 @@ class KitchenScene extends Phaser.Scene {
     if (!stationId) return; // 點到空地不移動
 
     const def = STATION_LAYOUT[stationId];
-    const targetX = Phaser.Math.Clamp(def.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
-    const targetY = Phaser.Math.Clamp(def.y, 30, WORLD_H - 30);
+    const fromPos = this.testPositions[role];
+    const approach = this.computeApproachPoint(def, fromPos.x, fromPos.y);
+    const targetX = Phaser.Math.Clamp(approach.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
+    const targetY = Phaser.Math.Clamp(approach.y, 30, WORLD_H - 30);
     this.testMoveTargets[role] = { x: targetX, y: targetY };
     this.testPendingInteract[role] = stationId;
     this.testMoveStartTime[role] = performance.now();
@@ -474,12 +508,13 @@ class KitchenScene extends Phaser.Scene {
       pos.x = Phaser.Math.Clamp(pos.x, ZONE_MIN_X[role], ZONE_MAX_X[role]);
       pos.y = Phaser.Math.Clamp(pos.y, 30, WORLD_H - 30);
 
-      // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
+      // target 是「站點面前的走位點」(見 computeApproachPoint),不是站點正中心,
+      // 正常情況下碰撞會讓角色剛好停在那個點附近,所以用比較嚴格的距離判斷有沒有走到位。
       // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
       if (target) {
         const distToTarget = Phaser.Math.Distance.Between(pos.x, pos.y, target.x, target.y);
         const stuck = performance.now() - this.testMoveStartTime[role] > MOVE_STUCK_TIMEOUT_MS;
-        if (distToTarget <= INTERACT_RADIUS || stuck) {
+        if (distToTarget <= ARRIVE_AT_APPROACH_DIST || stuck) {
           if (stuck) {
             pos.x = target.x;
             pos.y = target.y;
@@ -866,12 +901,13 @@ class KitchenScene extends Phaser.Scene {
     this.localPos.x = Phaser.Math.Clamp(this.localPos.x, ZONE_MIN_X[this.role], ZONE_MAX_X[this.role]);
     this.localPos.y = Phaser.Math.Clamp(this.localPos.y, 30, WORLD_H - 30);
 
-    // 因為有碰撞,角色走不到物件正中心,所以改成「靠近到可互動距離」就算抵達。
+    // target 是「站點面前的走位點」(見 computeApproachPoint),不是站點正中心,
+    // 正常情況下碰撞會讓角色剛好停在那個點附近,所以用比較嚴格的距離判斷有沒有走到位。
     // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
     if (this.moveTarget) {
       const distToTarget = Phaser.Math.Distance.Between(this.localPos.x, this.localPos.y, this.moveTarget.x, this.moveTarget.y);
       const stuck = performance.now() - this.moveStartTime > MOVE_STUCK_TIMEOUT_MS;
-      if (distToTarget <= INTERACT_RADIUS || stuck) {
+      if (distToTarget <= ARRIVE_AT_APPROACH_DIST || stuck) {
         if (stuck) {
           this.localPos.x = this.moveTarget.x;
           this.localPos.y = this.moveTarget.y;
