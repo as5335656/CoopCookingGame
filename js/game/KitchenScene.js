@@ -8,7 +8,6 @@ const INTERACT_RADIUS = 72; // 點擊判定用:離站點多近算是點到它
 const ARRIVE_AT_APPROACH_DIST = 16; // 走位判定用:離「站點面前的走位點」多近算是走到定位、可以觸發互動
 const MOVE_ARRIVE_DIST = 4;
 const PLAYER_SIZE = 64; // 角色碰撞用的方形邊長,跟顯示大小一致
-const MOVE_STUCK_TIMEOUT_MS = 2500; // 如果因為碰撞卡住太久走不到目標,直接放行,避免永久卡死
 const EDIT_GRID_SIZE = 8; // 編輯模式拖曳物件時,座標會對齊到這個格線大小,方便排整齊
 
 // 中間走道兩邊都不能穿越,雙方各自鎖在自己的區域,只能靠出餐口交接東西。
@@ -150,7 +149,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=3.3';
+    const v = '?v=3.4';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -215,7 +214,6 @@ class KitchenScene extends Phaser.Scene {
     this.localPos = { x: PLAYER_SPAWN[this.role].x, y: PLAYER_SPAWN[this.role].y };
     this.moveTarget = null;
     this.pendingInteractStationId = null;
-    this.moveStartTime = 0;
 
     if (this.localTestMode) {
       // 本機測試模式:一個人同時操作兩個角色,不走網路,直接在同一份 state 上互動。
@@ -225,7 +223,6 @@ class KitchenScene extends Phaser.Scene {
       };
       this.testMoveTargets = { host: null, joiner: null };
       this.testPendingInteract = { host: null, joiner: null };
-      this.testMoveStartTime = { host: 0, joiner: 0 };
       document.getElementById('btn-interact').style.display = 'none';
     }
 
@@ -472,7 +469,6 @@ class KitchenScene extends Phaser.Scene {
         const targetY = Phaser.Math.Clamp(approach.y, 30, WORLD_H - 30);
         this.moveTarget = { x: targetX, y: targetY };
         this.pendingInteractStationId = stationId;
-        this.moveStartTime = performance.now();
         // 點擊動畫要顯示在「點到的那個物件」本身位置,不是走位目標點(那兩個點常常不一樣,
         // 尤其走位目標為了閃開旁邊的站點被移到上方/下方時,動畫顯示在那裡會讓人以為點錯地方)。
         this.showTapMarker(def.x, def.y);
@@ -491,7 +487,6 @@ class KitchenScene extends Phaser.Scene {
     const targetY = Phaser.Math.Clamp(approach.y, 30, WORLD_H - 30);
     this.testMoveTargets[role] = { x: targetX, y: targetY };
     this.testPendingInteract[role] = stationId;
-    this.testMoveStartTime[role] = performance.now();
     // 同上,動畫顯示在點到的物件本身位置,不是走位目標點。
     this.showTapMarker(def.x, def.y);
   }
@@ -521,15 +516,9 @@ class KitchenScene extends Phaser.Scene {
 
       // target 是「站點面前的走位點」(見 computeApproachPoint),不是站點正中心,
       // 正常情況下碰撞會讓角色剛好停在那個點附近,所以用比較嚴格的距離判斷有沒有走到位。
-      // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
       if (target) {
         const distToTarget = Phaser.Math.Distance.Between(pos.x, pos.y, target.x, target.y);
-        const stuck = performance.now() - this.testMoveStartTime[role] > MOVE_STUCK_TIMEOUT_MS;
-        if (distToTarget <= ARRIVE_AT_APPROACH_DIST || stuck) {
-          if (stuck) {
-            pos.x = target.x;
-            pos.y = target.y;
-          }
+        if (distToTarget <= ARRIVE_AT_APPROACH_DIST) {
           this.testMoveTargets[role] = null;
           const stationId = this.testPendingInteract[role];
           if (stationId) {
@@ -953,15 +942,9 @@ class KitchenScene extends Phaser.Scene {
 
     // target 是「站點面前的走位點」(見 computeApproachPoint),不是站點正中心,
     // 正常情況下碰撞會讓角色剛好停在那個點附近,所以用比較嚴格的距離判斷有沒有走到位。
-    // 如果被卡住太久(例如兩個站點中間的縫太窄擠不過去),直接放行,不要讓角色卡死走不到。
     if (this.moveTarget) {
       const distToTarget = Phaser.Math.Distance.Between(this.localPos.x, this.localPos.y, this.moveTarget.x, this.moveTarget.y);
-      const stuck = performance.now() - this.moveStartTime > MOVE_STUCK_TIMEOUT_MS;
-      if (distToTarget <= ARRIVE_AT_APPROACH_DIST || stuck) {
-        if (stuck) {
-          this.localPos.x = this.moveTarget.x;
-          this.localPos.y = this.moveTarget.y;
-        }
+      if (distToTarget <= ARRIVE_AT_APPROACH_DIST) {
         this.moveTarget = null;
         if (this.pendingInteractStationId) {
           const stationId = this.pendingInteractStationId;
