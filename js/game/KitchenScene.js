@@ -158,7 +158,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=4.0';
+    const v = '?v=4.1';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -299,6 +299,15 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
+  // 依圖片原本的長寬比,算出「長邊等於 maxSize」時應該用的顯示寬高,避免圖片被硬拉伸成正方形
+  // 變形(例如盤子圖其實是扁寬的長方形,硬塞成正方形疊起來會明顯走樣)。
+  fitDisplaySize(textureKey, maxSize) {
+    const src = this.textures.get(textureKey).getSourceImage();
+    const ratio = src.width / src.height;
+    if (ratio >= 1) return { w: maxSize, h: maxSize / ratio };
+    return { w: maxSize * ratio, h: maxSize };
+  }
+
   // 所有站點都用方形(不再用圓形),不顯示名稱文字。
   // 不管是材料箱、垃圾桶、出餐口、空桌子,還是有自己專屬圖片的廚具(平底鍋/鉆板/取盤),
   // 一律先鋪一層桌面圖(table_wood)當底,圖示(廚具圖/食材圖/emoji)疊在上面——
@@ -325,7 +334,8 @@ class KitchenScene extends Phaser.Scene {
       itemAnchorX = ownArtKey === 'equip_pan' ? -displayW * 0.14 : 0;
       itemAnchorY = -2;
     } else if (iconImgKey) {
-      icon = this.add.image(0, -2, iconImgKey).setDisplaySize(size * 0.6, size * 0.6);
+      const fit = this.fitDisplaySize(iconImgKey, size * 0.6);
+      icon = this.add.image(0, -2, iconImgKey).setDisplaySize(fit.w, fit.h);
     } else if (def.emoji) {
       icon = this.add.text(0, -2, def.emoji, { fontSize: '28px' }).setOrigin(0.5);
     }
@@ -333,14 +343,19 @@ class KitchenScene extends Phaser.Scene {
     const progressBg = this.add.rectangle(0, 42, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
     const progressBar = this.add.rectangle(-26, 42, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
     const heldItemText = this.add.text(itemAnchorX, itemAnchorY, '', { fontSize: '22px' }).setOrigin(0.5);
-    const heldItemImage = this.add.image(itemAnchorX, itemAnchorY, iconImgKey || 'equip_plate')
-      .setDisplaySize(ownArtKey ? size * 0.42 : 30, ownArtKey ? size * 0.42 : 30)
+    const heldItemMaxSize = ownArtKey ? size * 0.42 : 30;
+    const heldItemInitialKey = iconImgKey || 'equip_plate';
+    const heldItemInitialFit = this.fitDisplaySize(heldItemInitialKey, heldItemMaxSize);
+    const heldItemImage = this.add.image(itemAnchorX, itemAnchorY, heldItemInitialKey)
+      .setDisplaySize(heldItemInitialFit.w, heldItemInitialFit.h)
       .setVisible(false);
+    heldItemImage.maxSize = heldItemMaxSize; // setItemVisual 換圖時要用同一個上限重新算長寬比
 
     // 盤子疊放用:最多視覺上疊 4 層(每層往上偏移一點),超過 4 個就在最上面顯示總數字。
+    const plateStackFit = this.fitDisplaySize('equip_plate', 36);
     const plateStackImages = [];
     for (let i = 0; i < 4; i++) {
-      plateStackImages.push(this.add.image(0, -16 - i * 13, 'equip_plate').setDisplaySize(36, 36).setVisible(false));
+      plateStackImages.push(this.add.image(0, -16 - i * 13, 'equip_plate').setDisplaySize(plateStackFit.w, plateStackFit.h).setVisible(false));
     }
     const plateStackCountText = this.add.text(18, -55, '', { fontSize: '13px', color: '#ffffff', fontStyle: 'bold', backgroundColor: '#00000080' }).setOrigin(0.5).setVisible(false);
 
@@ -362,7 +377,9 @@ class KitchenScene extends Phaser.Scene {
     const customerText = this.add.text(0, -46, '', { fontSize: '26px' }).setOrigin(0.5);
     const plate = this.add.rectangle(0, 6, 36, 36, 0xf5ead9).setStrokeStyle(2, 0xcbbfa8).setVisible(false);
     const foodText = this.add.text(0, 6, '', { fontSize: '22px' }).setOrigin(0.5);
-    const foodImage = this.add.image(0, 6, 'equip_plate').setDisplaySize(34, 34).setVisible(false);
+    const foodImageFit = this.fitDisplaySize('equip_plate', 34);
+    const foodImage = this.add.image(0, 6, 'equip_plate').setDisplaySize(foodImageFit.w, foodImageFit.h).setVisible(false);
+    foodImage.maxSize = 34;
     const progressBg = this.add.rectangle(0, 46, 52, 7, 0x1a1410).setOrigin(0.5).setVisible(false);
     const progressBar = this.add.rectangle(-26, 46, 0, 7, 0xe8804a).setOrigin(0, 0.5).setVisible(false);
 
@@ -378,7 +395,9 @@ class KitchenScene extends Phaser.Scene {
       const container = this.add.container(spawn.x, spawn.y);
       const image = this.add.image(0, 0, PLAYER_TEXTURES[role].idle).setDisplaySize(64, 64);
       const carryText = this.add.text(0, -40, '', { fontSize: '20px' }).setOrigin(0.5);
-      const carryImage = this.add.image(0, -40, 'equip_plate').setDisplaySize(30, 30).setVisible(false);
+      const carryImageFit = this.fitDisplaySize('equip_plate', 30);
+      const carryImage = this.add.image(0, -40, 'equip_plate').setDisplaySize(carryImageFit.w, carryImageFit.h).setVisible(false);
+      carryImage.maxSize = 30;
       const roleLabel = this.add.text(0, 34, role === 'host' ? 'P1' : 'P2', {
         fontSize: '11px',
         color: '#ffffff',
@@ -1105,17 +1124,27 @@ class KitchenScene extends Phaser.Scene {
     }
     if (typeof value === 'object' && value.isPlate) {
       imageObj.setTexture('equip_plate').setVisible(true);
+      this.applyItemImageFit(imageObj, 'equip_plate');
       textObj.setText(value.items.length > 0 ? String(value.items.length) : '');
       return;
     }
     const key = itemImageKey(value);
     if (key) {
       imageObj.setTexture(key).setVisible(true);
+      this.applyItemImageFit(imageObj, key);
       textObj.setText('');
     } else {
       imageObj.setVisible(false);
       textObj.setText(itemEmoji(value));
     }
+  }
+
+  // 換圖後用同一個「長邊上限」重新算長寬比顯示尺寸,避免不同原始比例的圖被硬拉伸。
+  applyItemImageFit(imageObj, textureKey) {
+    const maxSize = imageObj.maxSize;
+    if (!maxSize) return;
+    const fit = this.fitDisplaySize(textureKey, maxSize);
+    imageObj.setDisplaySize(fit.w, fit.h);
   }
 
   // 盤子疊放視覺:最多疊 4 層(每層往上偏移一點點,看起來像疊高),超過 4 個在最上面補一個數字角標。
