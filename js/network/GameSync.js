@@ -10,6 +10,7 @@ const GameSync = {
   onRemoteMove: null,
   onInteractRequest: null,
   onStateUpdate: null,
+  onPauseRequest: null,
 
   init(peerConnection, role) {
     this.pc = peerConnection;
@@ -26,6 +27,9 @@ const GameSync = {
       case 'interact':
         if (this.onInteractRequest) this.onInteractRequest(msg.stationId);
         break;
+      case 'pause':
+        if (this.onPauseRequest) this.onPauseRequest(!!msg.paused);
+        break;
       case 'state':
         if (this.onStateUpdate) this.onStateUpdate(msg.state);
         break;
@@ -38,6 +42,11 @@ const GameSync = {
 
   sendInteract(stationId) {
     this.pc.send({ type: 'interact', stationId });
+  },
+
+  // Joiner 按暫停/繼續:請 Host 改 state.paused(Host 是權威端,改完會跟著狀態快照同步回來)。
+  sendPause(paused) {
+    this.pc.send({ type: 'pause', paused });
   },
 
   sendState(state) {

@@ -131,7 +131,61 @@ h2 {
   display: none;
 }
 
+/* ---- 關卡選擇 ---- */
+
+#level-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  width: 100%;
+  max-width: 420px;
+}
+
+.level-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 4px;
+  border: 2px solid #6b5a45;
+  border-radius: 12px;
+  background: #3a2c20;
+  color: #f5ead9;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.level-btn.current {
+  border-color: #e8804a;
+}
+
+.level-btn:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.level-btn .level-name {
+  font-size: 18px;
+}
+
+.level-btn .level-stars {
+  font-size: 16px;
+  letter-spacing: 1px;
+}
+
+#btn-levels-back {
+  flex: none;
+  width: 160px;
+}
+
+#result-stars {
+  margin: 0;
+  font-size: 44px;
+  letter-spacing: 6px;
+}
+
 /* ---- 遊戲畫面 ---- */
+
 
 .game-screen {
   padding: 0;
@@ -148,6 +202,7 @@ h2 {
 @media (orientation: portrait) {
   #screen-game.active #game-canvas-container,
   #screen-game.active #hud-overlay,
+  #screen-game.active #pause-overlay,
   #screen-game.active #btn-interact {
     display: none;
   }
@@ -188,6 +243,7 @@ h2 {
   right: 0;
   display: flex;
   justify-content: space-between;
+  align-items: flex-start;
   padding: 10px 16px;
   pointer-events: none;
   z-index: 10;
@@ -201,6 +257,165 @@ h2 {
   border-radius: 10px;
   font-size: 18px;
   font-weight: 700;
+}
+
+/* 訂單列:畫面上方一排白底卡片,每張是一位客人點的餐——上面是成品的大圖示,下面一排小圈圈是要用的食材,
+   最下面一條是那一桌剩下的耐心。由左到右照點餐的先後排,上菜了就拿掉、後面的往前遞補;
+   訂單多到排不下時,後面的先藏在畫面外,前面的拿掉了才會補進來。
+   尺寸都乘上 --hud-scale(遊戲畫面實際顯示的縮放比例,KitchenScene 會填),手機上畫面小,卡片也跟著縮,
+   才不會蓋掉半個遊戲畫面。 */
+#hud-orders {
+  --u: calc(1px * var(--hud-scale, 1));
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-start;
+  gap: calc(6 * var(--u));
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  margin: -4px 8px 0;
+}
+
+.order-card {
+  display: flex;
+  flex: none;
+  flex-direction: column;
+  align-items: center;
+  gap: calc(3 * var(--u));
+  padding: calc(4 * var(--u)) calc(7 * var(--u)) calc(6 * var(--u));
+  border: calc(2 * var(--u)) solid #6b5a45;
+  border-radius: calc(12 * var(--u));
+  background: #ffffff;
+  animation: order-card-in 0.25s ease-out;
+}
+
+@keyframes order-card-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to { opacity: 1; transform: none; }
+}
+
+/* 等到耐心用完的訂單:紅框提醒(客人還在等,但這一桌結帳只付一半)。 */
+.order-card.angry {
+  border-color: #ff5a4f;
+  background: #fff1ef;
+}
+
+.order-dish {
+  width: calc(68 * var(--u));
+  height: calc(68 * var(--u));
+  object-fit: contain;
+  font-size: calc(52 * var(--u));
+  line-height: calc(68 * var(--u));
+  text-align: center;
+}
+
+.order-ingredients {
+  display: flex;
+  gap: calc(3 * var(--u));
+}
+
+.order-ingredient {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(36 * var(--u));
+  height: calc(36 * var(--u));
+  border: calc(2 * var(--u)) solid #cbbfa8;
+  border-radius: 50%;
+  background: #f7f1e6;
+  font-size: calc(22 * var(--u));
+  line-height: 1;
+}
+
+.order-ingredient img {
+  width: calc(25 * var(--u));
+  height: calc(25 * var(--u));
+  object-fit: contain;
+}
+
+.order-patience {
+  width: 100%;
+  height: calc(6 * var(--u));
+  border-radius: calc(3 * var(--u));
+  background: #d9cfbf;
+  overflow: hidden;
+}
+
+.order-patience > span {
+  display: block;
+  height: 100%;
+  background: #3fbf3f;
+}
+
+.order-patience.low > span {
+  background: #ff5a4f;
+}
+
+/* 星星:拿到的是亮的金色,還沒拿到的是暗的灰色。右上角、結算畫面、選關畫面共用。 */
+.star {
+  color: #6f675c;
+  opacity: 0.55;
+}
+
+.star.on {
+  color: #ffcf4a;
+  opacity: 1;
+  text-shadow: 0 0 6px rgba(255, 207, 74, 0.7);
+}
+
+/* 右上角:這一局目前拿到幾顆星,以及下一顆星要多少收入。 */
+#hud-stars {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  background: rgba(58, 44, 32, 0.85);
+  color: #f5ead9;
+  padding: 6px 12px;
+  border-radius: 10px;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+/* 每一個目標:「幾顆星 + 要多少收入」。還沒達到的整個是暗的,達到了就亮起來。 */
+.star-goal {
+  font-size: 14px;
+  font-weight: 600;
+  opacity: 0.6;
+}
+
+.star-goal.on {
+  opacity: 1;
+  color: #ffe9a8;
+}
+
+.star-goal .star {
+  font-size: 13px;
+  letter-spacing: 0;
+}
+
+#hud-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* 右上角的齒輪:點一下暫停並跳出「繼續遊戲 / 離開遊戲」。HUD 整層不吃點擊,只有這顆按鈕要能點。 */
+#btn-pause {
+  pointer-events: auto;
+  width: 40px;
+  height: 36px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: rgba(58, 44, 32, 0.85);
+  font-size: 20px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+#btn-pause:active {
+  filter: brightness(0.85);
 }
 
 #btn-interact {
@@ -240,6 +455,51 @@ h2 {
 
 #result-overlay .btn {
   max-width: 200px;
+}
+
+/* 暫停選單蓋在結算畫面上面:遊戲結束後也可以按齒輪離開。 */
+#pause-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  background: rgba(20, 15, 10, 0.9);
+  z-index: 25;
+}
+
+#pause-overlay.hidden {
+  display: none;
+}
+
+#pause-overlay .btn {
+  flex: none;
+  width: 200px;
+}
+
+.bgm-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 14px;
+}
+
+#bgm-volume {
+  width: 180px;
+}
+
+#bgm-volume-label {
+  min-width: 36px;
+  text-align: right;
+}
+
+#pause-overlay .bgm-row .btn {
+  width: auto;
+  padding: 8px 12px;
+  font-size: 14px;
 }
 
 #edit-panel {
@@ -331,6 +591,19 @@ h2 {
   background: #c0392b;
   border-color: #ff6b6b;
   color: #fff;
+}
+
+.edit-level-row .btn {
+  flex: none;
+  padding: 8px 12px;
+}
+
+.edit-level-row .size-display {
+  flex: 1;
+}
+
+#edit-plates-row.hidden {
+  display: none;
 }
 
 #edit-place-hint.hidden {

@@ -10,3 +10,6 @@ Thumbs.db
 
 # Env
 .env
+
+# 生成音樂的原始影片(很大,遊戲用的是從裡面取出來的 assets/audio/bgm/*.mp3)
+assets/audio/*.mp4

@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>雙人合作餐廳</title>
-<link rel="stylesheet" href="css/style.css?v=4.4" />
+<link rel="stylesheet" href="css/style.css?v=1.64" />
 </head>
 <body>
 
@@ -24,19 +24,19 @@
     <button id="btn-local-test" class="btn btn-secondary">本機測試(一人操作雙角色)</button>
   </div>
 
-  <p class="hint">關卡:</p>
-  <div class="panel">
-    <button id="btn-level-minus" class="btn btn-secondary">－</button>
-    <span id="level-display" class="size-display">1-1</span>
-    <button id="btn-level-plus" class="btn btn-secondary">＋</button>
-  </div>
-
   <div class="panel">
     <button id="btn-edit-layout" class="btn btn-secondary">編輯佈局(拖拉調整位置)</button>
   </div>
 
   <p id="menu-error" class="error-text"></p>
-  <div id="version-label">V4.4</div>
+  <div id="version-label">1.64v</div>
+</div>
+
+<div id="screen-levels" class="screen">
+  <h2 id="levels-title">選擇關卡</h2>
+  <p id="levels-hint" class="hint"></p>
+  <div id="level-grid"></div>
+  <button id="btn-levels-back" class="btn btn-secondary">返回</button>
 </div>
 
 <div id="screen-pairing" class="screen">
@@ -66,20 +66,47 @@
 
   <div id="hud-overlay">
     <div id="hud-timer">3:00</div>
-    <div id="hud-score">$0</div>
+    <div id="hud-orders"></div>
+    <div id="hud-right">
+      <div id="hud-stars"></div>
+      <div id="hud-score">$0</div>
+      <button id="btn-pause" aria-label="設定 / 暫停">⚙️</button>
+    </div>
   </div>
 
   <button id="btn-interact">互動</button>
 
   <div id="result-overlay" class="hidden">
     <h2>時間到!</h2>
+    <p id="result-stars"></p>
     <p id="result-score"></p>
+    <p id="result-goal" class="hint"></p>
     <button id="btn-play-again" class="btn btn-primary">再玩一次</button>
+  </div>
+
+  <div id="pause-overlay" class="hidden">
+    <h2>遊戲暫停</h2>
+    <button id="btn-resume" class="btn btn-primary">繼續遊戲</button>
+    <button id="btn-quit" class="btn btn-secondary">離開遊戲</button>
+    <div class="bgm-row">
+      <span>音樂:<span id="bgm-name"></span></span>
+      <button id="btn-bgm-next" class="btn btn-secondary">換一首</button>
+      <button id="btn-bgm-toggle" class="btn btn-secondary">開 / 關</button>
+    </div>
+    <div class="bgm-row">
+      <span>音量</span>
+      <input id="bgm-volume" type="range" min="0" max="100" step="1" />
+      <span id="bgm-volume-label"></span>
+    </div>
   </div>
 
   <div id="edit-panel" class="hidden">
     <button id="btn-toggle-panel" class="btn btn-secondary panel-toggle-btn">收合 »</button>
-    <p id="edit-level-label" class="hint">正在編輯:1-1</p>
+    <div class="panel edit-level-row">
+      <button id="btn-edit-level-prev" class="btn btn-secondary">◀</button>
+      <span id="edit-level-label" class="size-display">正在編輯:1-1</span>
+      <button id="btn-edit-level-next" class="btn btn-secondary">▶</button>
+    </div>
     <p class="hint">拖拉物件調整位置。廚具要先放「桌子」當底座,再點下面的種類按鈕、然後點一個空桌子放上去。</p>
     <div id="edit-palette"></div>
     <p id="edit-place-hint" class="hint hidden">請點一個空桌子,把選好的種類放上去(再點一次面板按鈕可以取消)</p>
@@ -92,25 +119,35 @@
       <span id="size-display" class="size-display">64</span>
       <button id="btn-size-plus" class="btn btn-secondary">＋</button>
     </div>
+    <div id="edit-plates-row" class="hidden">
+      <p class="hint">這張桌子一開始疊幾個盤子(整關就只有這些盤子):</p>
+      <div class="panel">
+        <button id="btn-plates-minus" class="btn btn-secondary">－</button>
+        <span id="plates-display" class="size-display">0</span>
+        <button id="btn-plates-plus" class="btn btn-secondary">＋</button>
+      </div>
+    </div>
     <button id="btn-delete-mode" class="btn btn-secondary">刪除模式:關閉</button>
     <button id="btn-copy-layout" class="btn btn-primary">複製佈局</button>
     <button id="btn-reset-layout" class="btn btn-secondary">還原成預設佈局</button>
     <textarea id="edit-output" readonly></textarea>
-    <button id="btn-exit-edit" class="btn btn-secondary">離開編輯</button>
+    <button id="btn-exit-edit" class="btn btn-secondary">儲存並離開</button>
   </div>
 </div>
 
 <script src="vendor/phaser.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
-<script src="js/webrtc/PeerConnection.js?v=4.4"></script>
-<script src="js/game/RecipeData.js?v=4.4"></script>
-<script src="js/game/GameState.js?v=4.4"></script>
-<script src="js/game/Station.js?v=4.4"></script>
-<script src="js/game/OrderManager.js?v=4.4"></script>
-<script src="js/game/KitchenScene.js?v=4.4"></script>
-<script src="js/network/GameSync.js?v=4.4"></script>
-<script src="js/ui/HUD.js?v=4.4"></script>
-<script src="js/ui/InteractButton.js?v=4.4"></script>
-<script src="js/main.js?v=4.4"></script>
+<script src="js/webrtc/PeerConnection.js?v=1.64"></script>
+<script src="js/game/RecipeData.js?v=1.64"></script>
+<script src="js/game/Progress.js?v=1.64"></script>
+<script src="js/game/GameState.js?v=1.64"></script>
+<script src="js/game/Station.js?v=1.64"></script>
+<script src="js/game/OrderManager.js?v=1.64"></script>
+<script src="js/game/KitchenScene.js?v=1.64"></script>
+<script src="js/network/GameSync.js?v=1.64"></script>
+<script src="js/ui/HUD.js?v=1.64"></script>
+<script src="js/ui/Bgm.js?v=1.64"></script>
+<script src="js/ui/InteractButton.js?v=1.64"></script>
+<script src="js/main.js?v=1.64"></script>
 </body>
 </html>
