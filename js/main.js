@@ -293,10 +293,20 @@ window.addEventListener('orientationchange', () => {
   let lastBox = '';
   function fitGameToScreen() {
     const view = window.visualViewport;
-    const w = Math.floor(view ? view.width : window.innerWidth);
+    const fullW = Math.floor(view ? view.width : window.innerWidth);
     const h = Math.floor(view ? view.height : window.innerHeight);
-    const left = Math.round(view ? view.offsetLeft : 0);
+    const viewLeft = Math.round(view ? view.offsetLeft : 0);
     const top = Math.round(view ? view.offsetTop : 0);
+    // 螢幕比遊戲畫面(16:9)寬的時候,多出來的寬度全部留在「鏡頭那一側」當黑邊,遊戲貼齊另一側。
+    // 手機逆時針轉成橫的(最常見的拿法)鏡頭在左邊;反過來拿鏡頭在右邊。判斷不出方向就當作在左邊。
+    const w = Math.min(fullW, Math.floor((h * 16) / 9));
+    const angle = screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : window.orientation;
+    const cameraOnRight = angle === 270 || angle === -90;
+    const bar = fullW - w;
+    const left = viewLeft + (cameraOnRight ? 0 : bar);
+    // 上方的時間/金額列跟著遊戲畫面對齊,不要壓在黑邊上。
+    const hud = document.getElementById('hud-overlay');
+    if (hud) Object.assign(hud.style, { left: (cameraOnRight ? 0 : bar) + 'px', right: (cameraOnRight ? bar : 0) + 'px', paddingLeft: '16px', paddingRight: '16px' });
     const key = [w, h, left, top].join(',');
     if (key !== lastBox && w > 0 && h > 0) {
       lastBox = key;

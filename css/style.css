@@ -444,7 +444,7 @@ h2 {
 
 #btn-interact {
   position: absolute;
-  right: max(24px, env(safe-area-inset-right, 0px));
+  right: 24px;
   bottom: env(safe-area-inset-bottom, 30px);
   width: 84px;
   height: 84px;
