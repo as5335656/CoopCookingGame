@@ -2,6 +2,12 @@
 // 佈局對應參考截圖:左側料理站、中間出餐口、右側外場桌位(顧客主要從右側/門口進來)。
 
 const WORLD_W = 960;
+// 場地的左右邊界:x = 0 ~ 960,畫面就是 16:9,看得到的地方都是場地(都可以走、可以擺東西)。
+// 螢幕比 16:9 寬(手機橫放)時,多出來的寬度是黑邊,不鋪地板——鋪了看得到卻不能用,反而奇怪。
+// 以後想把場地加寬,改這兩個數字就好(尋路、編輯、畫面比例都是照它們算的);
+// 往外加的寬度要是尋路格子(6)的整數倍,例如左邊加兩格設備就把 WORLD_MIN_X 改成 -132。
+const WORLD_MIN_X = 0;
+const WORLD_MAX_X = WORLD_W;
 const WORLD_H = 540;
 const MOVE_SPEED = 220;
 const MOVE_SEND_INTERVAL_MS = 50; // 每隔多久把自己的位置傳給對方
@@ -53,8 +59,8 @@ const NEIGHBOR_OFFSETS = [
 ];
 
 // 中間走道兩邊都不能穿越,雙方各自鎖在自己的區域,只能靠出餐口交接東西。
-const ZONE_MAX_X = { host: 450, joiner: WORLD_W - 30 };
-const ZONE_MIN_X = { host: 30, joiner: 510 };
+const ZONE_MAX_X = { host: 450, joiner: WORLD_MAX_X - 30 };
+const ZONE_MIN_X = { host: WORLD_MIN_X + 30, joiner: 510 };
 
 const LEVEL_COUNT = 8;
 
@@ -338,7 +344,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.72';
+    const v = '?v=1.73';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -402,17 +408,13 @@ class KitchenScene extends Phaser.Scene {
     // 所以縮放之後還要額外用 centerOn 把視角拉回邏輯世界的正中央。
     const applyZoom = () => {
       this.cameras.main.setZoom(window.RENDER_SCALE || 1);
-      // 手機螢幕比 16:9 寬時,畫布會多出一段(VIEW_EXTRA,世界座標寬度)只畫地板,放在鏡頭那一側(見 main.js 的 fitGameToScreen);
-      // 視角要往那一側偏半段,世界(0-960)才會貼齊另一側。
-      const extra = window.VIEW_EXTRA || 0;
-      this.cameras.main.centerOn(WORLD_W / 2 + (window.VIEW_EXTRA_ON_RIGHT ? extra / 2 : -extra / 2), WORLD_H / 2);
+      this.cameras.main.centerOn((WORLD_MIN_X + WORLD_MAX_X) / 2, WORLD_H / 2);
       // 畫面上方的訂單列是網頁元素,不會跟著畫布縮放;把畫布實際顯示的比例告訴它,讓卡片大小跟遊戲畫面等比例。
       const shownHeight = this.game.canvas.getBoundingClientRect().height || WORLD_H;
       document.documentElement.style.setProperty('--hud-scale', (shownHeight / WORLD_H).toFixed(3));
     };
     applyZoom();
     this.scale.on('resize', applyZoom);
-    window.GAME_APPLY_VIEW = applyZoom; // 手機轉到另一個方向時 main.js 會叫這個,把多出來的地板換邊
 
     this.role = window.NET_ROLE;
     this.isHost = this.role === 'host';
@@ -429,9 +431,9 @@ class KitchenScene extends Phaser.Scene {
 
     // 出生點可能剛好被這一關的檯面佔住(佈局是可以自己排的),挪到離預設出生點最近的空地。
     for (const role of ['host', 'joiner']) {
-      const minCol = Math.ceil(ZONE_MIN_X[role] / GRID_CELL);
-      const maxCol = Math.floor(ZONE_MAX_X[role] / GRID_CELL) - 1;
-      const col = Phaser.Math.Clamp(Math.floor(PLAYER_SPAWN_PREFERRED[role].x / GRID_CELL), minCol, maxCol);
+      const minCol = Math.ceil((ZONE_MIN_X[role] - WORLD_MIN_X) / GRID_CELL);
+      const maxCol = Math.floor((ZONE_MAX_X[role] - WORLD_MIN_X) / GRID_CELL) - 1;
+      const col = Phaser.Math.Clamp(Math.floor((PLAYER_SPAWN_PREFERRED[role].x - WORLD_MIN_X) / GRID_CELL), minCol, maxCol);
       const open = this.findNearestOpenCell(col, Math.floor(PLAYER_SPAWN_PREFERRED[role].y / GRID_CELL), minCol, maxCol);
       Object.assign(PLAYER_SPAWN[role], open ? this.gridToWorld(open.col, open.row) : PLAYER_SPAWN_PREFERRED[role]);
     }
@@ -640,11 +642,8 @@ class KitchenScene extends Phaser.Scene {
     // 客人進來的門口(前台上方固定位置,見 OrderManager.js 的 CUSTOMER_ENTRANCE)。
     this.addText(CUSTOMER_ENTRANCE.x, 16, '🚪', { fontSize: '28px' }).setOrigin(0.5).setDepth(-1);
     this.add.image(WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setDepth(-2);
-    // 世界左右兩邊外面各鋪一張左右翻轉的地板(翻轉後接縫才對得起來):手機寬螢幕多出來的那一段會看到它,其他裝置看不到。
-    if (window.VIEW_EXTRA) {
-      this.add.image(-WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setFlipX(true).setDepth(-2);
-      this.add.image(WORLD_W * 1.5, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setFlipX(true).setDepth(-2);
-    }
+    // 場地有往左加寬的話(WORLD_MIN_X < 0),那一段再鋪一張左右翻轉的地板(翻轉後接縫才對得起來)。
+    if (WORLD_MIN_X < 0) this.add.image(-WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setFlipX(true).setDepth(-2);
     // 中間走道分隔線(半透明深色條),提示這裡兩邊都不能穿越
     this.add.rectangle(480, WORLD_H / 2, 36, WORLD_H, 0x2b2018, 0.35).setDepth(-1);
   }
@@ -832,10 +831,8 @@ class KitchenScene extends Phaser.Scene {
       this.orderBarRightAt = now;
       const info = document.getElementById('hud-right').getBoundingClientRect();
       const canvas = this.game.canvas.getBoundingClientRect();
-      // 畫布可能比世界寬(手機多出來的地板),所以用相機把螢幕位置換成世界座標。
-      const viewW = WORLD_W + (window.VIEW_EXTRA || 0);
-      const viewLeft = window.VIEW_EXTRA_ON_RIGHT ? 0 : -(window.VIEW_EXTRA || 0);
-      this.orderBarRightX = canvas.width > 0 ? viewLeft + ((info.left - canvas.left) / canvas.width) * viewW : WORLD_W;
+      // 畫布最左邊是 WORLD_MIN_X,不是 0。
+      this.orderBarRightX = canvas.width > 0 ? WORLD_MIN_X + ((info.left - canvas.left) / canvas.width) * (WORLD_MAX_X - WORLD_MIN_X) : WORLD_MAX_X;
     }
     return this.orderBarRightX;
   }
@@ -1028,7 +1025,8 @@ class KitchenScene extends Phaser.Scene {
 
   // marginFor(def):這個站點周圍要留多寬不能走(站點的邊再往外幾 px);回傳 null 代表這個站點不算障礙。
   buildGrid(marginFor) {
-    const cols = Math.floor(WORLD_W / GRID_CELL);
+    // 格子的第 0 欄是場地最左邊(WORLD_MIN_X),不是 x = 0。
+    const cols = Math.floor((WORLD_MAX_X - WORLD_MIN_X) / GRID_CELL);
     const rows = Math.floor(WORLD_H / GRID_CELL);
     // 後台的範圍只到最上面那一排檯面為止:那一排的上緣以上不能走(不能繞到檯面後面去)。
     // 最上面那一排的東西只能從下面(或斜對角)拿。
@@ -1040,7 +1038,7 @@ class KitchenScene extends Phaser.Scene {
     for (let r = 0; r < rows; r++) {
       const rowArr = new Uint8Array(cols);
       for (let c = 0; c < cols; c++) {
-        const wx = c * GRID_CELL + GRID_CELL / 2;
+        const wx = WORLD_MIN_X + c * GRID_CELL + GRID_CELL / 2;
         const wy = r * GRID_CELL + GRID_CELL / 2;
         // 畫面最上/最下緣留白也算不可走——不然像「整排站點剛好把區域封死」這種情況,
         // A* 可能會找到一小塊卡在畫面邊緣、跟主要走道完全不連通的空地當成合法目標。
@@ -1067,7 +1065,7 @@ class KitchenScene extends Phaser.Scene {
   }
 
   gridToWorld(col, row) {
-    return { x: col * GRID_CELL + GRID_CELL / 2, y: row * GRID_CELL + GRID_CELL / 2 };
+    return { x: WORLD_MIN_X + col * GRID_CELL + GRID_CELL / 2, y: row * GRID_CELL + GRID_CELL / 2 };
   }
 
   isCellBlocked(col, row, minCol, maxCol) {
@@ -1098,10 +1096,10 @@ class KitchenScene extends Phaser.Scene {
   // 用 Dijkstra 從玩家「實際位置」開始展開搜尋,保證只要能找到符合條件的格子,那個格子一定是
   // 走得到的,因為就是沿著這條搜尋展開的路徑走過去的。
   planPathToStation(def, fromX, fromY, role) {
-    const minCol = Math.ceil(ZONE_MIN_X[role] / GRID_CELL);
-    const maxCol = Math.floor(ZONE_MAX_X[role] / GRID_CELL) - 1;
+    const minCol = Math.ceil((ZONE_MIN_X[role] - WORLD_MIN_X) / GRID_CELL);
+    const maxCol = Math.floor((ZONE_MAX_X[role] - WORLD_MIN_X) / GRID_CELL) - 1;
 
-    let startCol = Phaser.Math.Clamp(Math.floor(fromX / GRID_CELL), minCol, maxCol);
+    let startCol = Phaser.Math.Clamp(Math.floor((fromX - WORLD_MIN_X) / GRID_CELL), minCol, maxCol);
     let startRow = Phaser.Math.Clamp(Math.floor(fromY / GRID_CELL), 0, this.gridRows - 1);
     if (this.isCellBlocked(startCol, startRow, minCol, maxCol)) {
       const open = this.findNearestOpenCell(startCol, startRow, minCol, maxCol);
@@ -1379,8 +1377,8 @@ class KitchenScene extends Phaser.Scene {
       if (this.deleteMode || this.pendingGadgetType) return; // 刪除/放置模式下不要順便被拖走
       const snapped = this.snapDragPosition(gameObject.stationId, dragX, dragY);
       const resolved = this.resolveCollision(gameObject.stationId, snapped.x, snapped.y, this.sizes[gameObject.stationId]);
-      // 物件只能放在場地(0-960 x 0-540)裡面:寬螢幕左邊多鋪的那段地板只是裝飾,不能擺東西。
-      gameObject.x = Phaser.Math.Clamp(resolved.x, EDIT_EDGE_MARGIN, WORLD_W - EDIT_EDGE_MARGIN);
+      // 物件只能放在場地裡面。
+      gameObject.x = Phaser.Math.Clamp(resolved.x, WORLD_MIN_X + EDIT_EDGE_MARGIN, WORLD_MAX_X - EDIT_EDGE_MARGIN);
       gameObject.y = Phaser.Math.Clamp(resolved.y, EDIT_EDGE_MARGIN, WORLD_H - EDIT_EDGE_MARGIN);
     });
 
@@ -1734,7 +1732,7 @@ class KitchenScene extends Phaser.Scene {
     for (const [dx, dy] of [[size, 0], [-size, 0], [0, size], [0, -size]]) {
       const x = pos.x + dx;
       const y = pos.y + dy;
-      if (x - size / 2 < 0 || x + size / 2 > WORLD_W || y - size / 2 < 0 || y + size / 2 > WORLD_H) continue;
+      if (x - size / 2 < WORLD_MIN_X || x + size / 2 > WORLD_MAX_X || y - size / 2 < 0 || y + size / 2 > WORLD_H) continue;
       const blocked = Object.keys(this.stationSprites).some((otherId) => {
         if (otherId === id) return false;
         const other = this.stationSprites[otherId].container;
@@ -2251,9 +2249,9 @@ class KitchenScene extends Phaser.Scene {
   // 最後一步再坐上椅子。找不到路(例如桌子被整個圍住)就直接走直線過去。
   planCustomerPath(def, side, seat) {
     const role = def.x < (ZONE_MAX_X.host + ZONE_MIN_X.joiner) / 2 ? 'host' : 'joiner';
-    const minCol = Math.ceil(ZONE_MIN_X[role] / GRID_CELL);
-    const maxCol = Math.floor(ZONE_MAX_X[role] / GRID_CELL) - 1;
-    const entranceCol = Phaser.Math.Clamp(Math.floor(CUSTOMER_ENTRANCE.x / GRID_CELL), minCol, maxCol);
+    const minCol = Math.ceil((ZONE_MIN_X[role] - WORLD_MIN_X) / GRID_CELL);
+    const maxCol = Math.floor((ZONE_MAX_X[role] - WORLD_MIN_X) / GRID_CELL) - 1;
+    const entranceCol = Phaser.Math.Clamp(Math.floor((CUSTOMER_ENTRANCE.x - WORLD_MIN_X) / GRID_CELL), minCol, maxCol);
     const points = [{ x: CUSTOMER_ENTRANCE.x, y: CUSTOMER_ENTRANCE.y }];
     // 客人走路要繞過所有桌子,尋路期間暫時換成客人用的網格(見 buildWalkGrid)。
     const playerGrid = this.walkGrid;
