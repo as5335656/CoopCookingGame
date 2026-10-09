@@ -334,7 +334,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.64';
+    const v = '?v=1.66';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -397,7 +397,7 @@ class KitchenScene extends Phaser.Scene {
     // 相機預設會置中在「放大後畫布」的中心,不是我們邏輯世界(0-960,0-540)的中心,
     // 所以縮放之後還要額外用 centerOn 把視角拉回邏輯世界的正中央。
     const applyZoom = () => {
-      this.cameras.main.setZoom(window.devicePixelRatio || 1);
+      this.cameras.main.setZoom(window.RENDER_SCALE || 1);
       this.cameras.main.centerOn(WORLD_W / 2, WORLD_H / 2);
       // 畫面上方的訂單列是網頁元素,不會跟著畫布縮放;把畫布實際顯示的比例告訴它,讓卡片大小跟遊戲畫面等比例。
       const shownHeight = this.game.canvas.getBoundingClientRect().height || WORLD_H;
@@ -638,9 +638,9 @@ class KitchenScene extends Phaser.Scene {
   }
 
   // 建立文字物件(emoji 圖示、數字角標...)一律走這裡:照螢幕的像素密度提高文字的解析度。
-  // 畫布本身有乘上 devicePixelRatio(見 main.js),文字不跟著提高的話,在高解析度螢幕上會被放大而變糊。
+  // 畫布本身有乘上 RENDER_SCALE(螢幕像素密度,上限 2 倍)(見 main.js),文字不跟著提高的話,在高解析度螢幕上會被放大而變糊。
   addText(x, y, text, style) {
-    const resolution = Math.max(1, window.devicePixelRatio || 1);
+    const resolution = Math.max(1, window.RENDER_SCALE || 1);
     return this.add.text(x, y, text, Object.assign({ resolution }, style));
   }
 

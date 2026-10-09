@@ -164,6 +164,19 @@ window.addEventListener('orientationchange', () => {
     showScreen('menu');
   });
 
+  // 本機測試跟編輯佈局是開發用的:只在電腦上顯示,手機(跟平板)打開看不到這兩顆按鈕,玩家只會看到建立房間/加入房間。
+  // 判斷方式:瀏覽器自己報的裝置類型是手機/平板(iPad 會自稱 Mac,所以另外用「Mac + 多點觸控」認)。
+  // 開發時要在手機上用這兩個功能,網址後面加 ?dev=1 就會顯示。
+  const ua = navigator.userAgent || '';
+  const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const showDevTools = !isPhoneOrTablet || /[?&]dev=1(&|$)/.test(location.search);
+  if (!showDevTools) {
+    for (const id of ['btn-local-test', 'btn-edit-layout']) {
+      const panel = document.getElementById(id).closest('.panel');
+      if (panel) panel.style.display = 'none';
+    }
+  }
+
   // 本機測試跟編輯佈局是開發用的,所有關卡都可以直接選,不受過關進度限制。
   document.getElementById('btn-local-test').addEventListener('click', () => {
     menuError.textContent = '';
@@ -192,6 +205,53 @@ window.addEventListener('orientationchange', () => {
     location.reload();
   });
 
+  const MAX_RENDER_SCALE = 2;
+
+  // 排查「玩到一半跳回主選單」用:遊戲開始時留一個記號,正常離開頁面(pagehide)時清掉。
+  // 如果回到主選單時記號還在,代表上一局是被瀏覽器強制重新載入的(通常是記憶體不足),在主選單上講清楚。
+  const RUNNING_KEY = 'coopGameRunning';
+  function markGameRunning() {
+    try {
+      localStorage.setItem(RUNNING_KEY, window.NET_ROLE || '?');
+    } catch (e) {
+      // 存不了就沒有這個提示而已
+    }
+  }
+  window.addEventListener('pagehide', () => {
+    try {
+      localStorage.removeItem(RUNNING_KEY);
+    } catch (e) {
+      // 忽略
+    }
+  });
+  try {
+    if (localStorage.getItem(RUNNING_KEY)) {
+      localStorage.removeItem(RUNNING_KEY);
+      menuError.textContent = '上一局不正常結束:瀏覽器把頁面重新載入了(通常是手機記憶體不足)。請關掉其他分頁跟 App 再試一次。';
+    }
+  } catch (e) {
+    // 忽略
+  }
+
+  // 程式出錯時把錯誤訊息直接顯示在畫面上(手機上看不到主控台),方便回報。
+  function showScriptError(text) {
+    let box = document.getElementById('script-error');
+    if (!box) {
+      box = document.createElement('div');
+      box.id = 'script-error';
+      box.style.cssText = 'position:fixed;left:4px;bottom:4px;z-index:9999;max-width:70%;padding:4px 6px;font-size:11px;color:#fff;background:rgba(160,0,0,0.85);border-radius:4px;pointer-events:none;';
+      document.body.appendChild(box);
+    }
+    box.textContent = '錯誤:' + text;
+  }
+  window.addEventListener('error', (e) => {
+    if (!e.message) return; // 圖片/音效載入失敗也會觸發 error,那種沒有 message
+    showScriptError(e.message + ' (' + String(e.filename || '').split('/').pop().split('?')[0] + ':' + e.lineno + ')');
+  });
+  window.addEventListener('unhandledrejection', (e) => {
+    showScriptError(String((e.reason && e.reason.message) || e.reason));
+  });
+
   let gameStarted = false;
   function startGame() {
     if (gameStarted) return;
@@ -201,7 +261,11 @@ window.addEventListener('orientationchange', () => {
     // Phaser 3.80 不會自動處理高解析度螢幕,所以把畫布的實際像素尺寸乘上裝置像素密度,
     // 場景那邊再用 camera zoom 把邏輯座標(還是 0-960 x 0-540)放大回來對應,
     // 這樣座標/佈局資料完全不用改,只有畫面變清晰。
-    const dpr = window.devicePixelRatio || 1;
+    // 上限 2 倍:iPhone 是 3 倍,照 3 倍畫布會是 2880x1620,加上貼圖很吃記憶體,
+    // Safari 記憶體不夠時會直接把頁面重新載入(看起來就是「閃退回主選單」)。2 倍(1920x1080)肉眼幾乎看不出差別。
+    const dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_SCALE);
+    window.RENDER_SCALE = dpr;
+    markGameRunning();
     window.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: 'game-canvas-container',

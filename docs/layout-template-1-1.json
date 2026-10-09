@@ -1,0 +1,286 @@
+{
+  "src_beef": {
+    "x": 40,
+    "y": 244,
+    "type": "ingredient_source",
+    "itemType": "beef_raw",
+    "label": "生牛肉",
+    "size": 64
+  },
+  "src_chicken": {
+    "x": 40,
+    "y": 180,
+    "type": "ingredient_source",
+    "itemType": "chicken_raw",
+    "label": "生雞肉",
+    "size": 64
+  },
+  "src_bun": {
+    "x": 40,
+    "y": 308,
+    "size": 64,
+    "type": "counter",
+    "label": "桌子",
+    "plates": 0
+  },
+  "pan_1": {
+    "x": 40,
+    "y": 372,
+    "type": "cooking",
+    "img": "equip_pan",
+    "label": "平底鍋",
+    "size": 64
+  },
+  "cutting_board_1": {
+    "x": 40,
+    "y": 436,
+    "size": 64,
+    "type": "counter",
+    "label": "桌子",
+    "plates": 0
+  },
+  "plate_stack": {
+    "x": 40,
+    "y": 500,
+    "type": "plate_stack",
+    "img": "equip_plate",
+    "label": "取盤",
+    "size": 64,
+    "plates": 4
+  },
+  "trash_bin": {
+    "x": 104,
+    "y": 500,
+    "type": "trash",
+    "emoji": "🗑️",
+    "label": "垃圾桶",
+    "size": 64
+  },
+  "table_1": {
+    "x": 712,
+    "y": 170,
+    "type": "table",
+    "customerEmoji": "🐼",
+    "label": "桌位1",
+    "size": 124,
+    "aspect": 0.5418502202643172
+  },
+  "table_2": {
+    "x": 872,
+    "y": 170,
+    "type": "table",
+    "customerEmoji": "🐧",
+    "label": "桌位2",
+    "size": 124,
+    "aspect": 0.5418502202643172
+  },
+  "table_3": {
+    "x": 712,
+    "y": 274,
+    "type": "table",
+    "customerEmoji": "🐰",
+    "label": "桌位3",
+    "size": 124,
+    "aspect": 0.5418502202643172
+  },
+  "table_4": {
+    "x": 872,
+    "y": 274,
+    "type": "table",
+    "customerEmoji": "🐨",
+    "label": "桌位4",
+    "size": 124,
+    "aspect": 0.5418502202643172
+  },
+  "table_5": {
+    "x": 712,
+    "y": 376,
+    "type": "table",
+    "customerEmoji": "🐷",
+    "label": "桌位5",
+    "size": 124,
+    "aspect": 0.5418502202643172
+  },
+  "table_6": {
+    "x": 872,
+    "y": 376,
+    "type": "table",
+    "customerEmoji": "🦊",
+    "label": "桌位6",
+    "size": 124,
+    "aspect": 0.5418502202643172
+  },
+  "new_counter_1": {
+    "type": "teleport_in",
+    "img": "teleport_in",
+    "fullArt": true,
+    "aspect": 2,
+    "shortLabel": "傳送入(後台放)",
+    "x": 448,
+    "y": 272,
+    "size": 64
+  },
+  "new_counter_3": {
+    "x": 672,
+    "y": 496,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_4": {
+    "x": 736,
+    "y": 496,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_5": {
+    "x": 800,
+    "y": 496,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_6": {
+    "x": 864,
+    "y": 496,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_2": {
+    "type": "teleport_out",
+    "img": "teleport_out",
+    "fullArt": true,
+    "aspect": 2,
+    "shortLabel": "傳送出(前台拿)",
+    "x": 512,
+    "y": 272,
+    "size": 64
+  },
+  "new_counter_7": {
+    "x": 168,
+    "y": 500,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_8": {
+    "type": "workbench",
+    "emoji": "",
+    "shortLabel": "工作台",
+    "x": 104,
+    "y": 180,
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_9": {
+    "x": 360,
+    "y": 180,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_10": {
+    "x": 296,
+    "y": 180,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_11": {
+    "x": 232,
+    "y": 180,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_12": {
+    "x": 168,
+    "y": 180,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_13": {
+    "x": 544,
+    "y": 432,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_14": {
+    "x": 424,
+    "y": 500,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_15": {
+    "x": 232,
+    "y": 500,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_16": {
+    "x": 360,
+    "y": 500,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_17": {
+    "x": 296,
+    "y": 500,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_18": {
+    "x": 544,
+    "y": 496,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_19": {
+    "type": "trash",
+    "emoji": "🗑️",
+    "shortLabel": "垃圾桶",
+    "x": 608,
+    "y": 496,
+    "size": 64
+  },
+  "new_counter_20": {
+    "x": 544,
+    "y": 176,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  },
+  "new_counter_21": {
+    "x": 544,
+    "y": 368,
+    "type": "counter",
+    "shortLabel": "桌子(先放這個)",
+    "size": 64,
+    "plates": 0
+  }
+}
