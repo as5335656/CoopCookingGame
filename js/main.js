@@ -286,6 +286,36 @@ window.addEventListener('orientationchange', () => {
     showScriptError(String((e.reason && e.reason.message) || e.reason));
   });
 
+  // 把放畫布的外框直接設成「現在真的看得到的區域」(visualViewport)的位置跟大小,用像素寫死。
+  // 不靠 CSS 的 100% / 100dvh:iPhone Safari 上那個高度會比實際看得到的還高,Phaser 照外框縮放,畫布就超出螢幕被切掉。
+  const canvasBox = document.getElementById('game-canvas-container');
+  const screenDiag = document.getElementById('screen-diag');
+  let lastBox = '';
+  function fitGameToScreen() {
+    const view = window.visualViewport;
+    const w = Math.floor(view ? view.width : window.innerWidth);
+    const h = Math.floor(view ? view.height : window.innerHeight);
+    const left = Math.round(view ? view.offsetLeft : 0);
+    const top = Math.round(view ? view.offsetTop : 0);
+    const key = [w, h, left, top].join(',');
+    if (key !== lastBox && w > 0 && h > 0) {
+      lastBox = key;
+      Object.assign(canvasBox.style, { position: 'fixed', left: left + 'px', top: top + 'px', right: 'auto', bottom: 'auto', width: w + 'px', height: h + 'px' });
+    }
+    // 暫停選單最下面那行小字:畫面尺寸的診斷資訊,畫面跑掉的時候截圖回報用。
+    if (screenDiag) {
+      const canvas = canvasBox.querySelector('canvas');
+      const r = canvas ? canvas.getBoundingClientRect() : null;
+      const g = screens.game.getBoundingClientRect();
+      screenDiag.textContent =
+        'win ' + window.innerWidth + 'x' + window.innerHeight +
+        ' | view ' + (view ? Math.round(view.width) + 'x' + Math.round(view.height) + '+' + left + '+' + top + ' x' + view.scale.toFixed(2) : '-') +
+        ' | page ' + Math.round(g.width) + 'x' + Math.round(g.height) + ' scroll ' + Math.round(window.scrollX) + ',' + Math.round(window.scrollY) +
+        ' | canvas ' + (r ? Math.round(r.left) + ',' + Math.round(r.top) + ' ' + Math.round(r.width) + 'x' + Math.round(r.height) : '-') +
+        ' | dpr ' + window.devicePixelRatio + ' scr ' + screen.width + 'x' + screen.height;
+    }
+  }
+
   let gameStarted = false;
   function startGame() {
     if (gameStarted) return;
@@ -312,6 +342,15 @@ window.addEventListener('orientationchange', () => {
       backgroundColor: '#5c8f7a',
       scene: [KitchenScene]
     });
+
+    fitGameToScreen();
+    if (window.visualViewport) {
+      window.visualViewport.addEventListener('resize', fitGameToScreen);
+      window.visualViewport.addEventListener('scroll', fitGameToScreen);
+    }
+    window.addEventListener('resize', fitGameToScreen);
+    window.addEventListener('orientationchange', fitGameToScreen);
+    setInterval(fitGameToScreen, 500); // 手機轉向時瀏覽器回報的尺寸有時會慢半拍,定時再對一次
 
     new InteractButtonUI(document.getElementById('btn-interact'));
   }

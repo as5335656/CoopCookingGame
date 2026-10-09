@@ -206,6 +206,7 @@ h2 {
 
 
 .game-screen {
+  background: #000; /* 遊戲畫面左右兩邊留的邊(瀏海/鏡頭那一側)用全黑 */
   overflow: hidden;
   padding: 0;
   position: relative;
@@ -266,7 +267,8 @@ h2 {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  padding: 10px 16px;
+  /* 左右避開 iPhone 橫放時的鏡頭/瀏海區 */
+  padding: 10px max(16px, env(safe-area-inset-right, 0px)) 10px max(16px, env(safe-area-inset-left, 0px));
   pointer-events: none;
   z-index: 10;
 }
@@ -442,7 +444,7 @@ h2 {
 
 #btn-interact {
   position: absolute;
-  right: 24px;
+  right: max(24px, env(safe-area-inset-right, 0px));
   bottom: env(safe-area-inset-bottom, 30px);
   width: 84px;
   height: 84px;
