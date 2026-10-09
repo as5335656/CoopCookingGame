@@ -337,7 +337,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.69';
+    const v = '?v=1.70';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -401,13 +401,17 @@ class KitchenScene extends Phaser.Scene {
     // 所以縮放之後還要額外用 centerOn 把視角拉回邏輯世界的正中央。
     const applyZoom = () => {
       this.cameras.main.setZoom(window.RENDER_SCALE || 1);
-      this.cameras.main.centerOn(WORLD_W / 2, WORLD_H / 2);
+      // 手機螢幕比 16:9 寬時,畫布會多出一段(VIEW_EXTRA,世界座標寬度)只畫地板,放在鏡頭那一側(見 main.js 的 fitGameToScreen);
+      // 視角要往那一側偏半段,世界(0-960)才會貼齊另一側。
+      const extra = window.VIEW_EXTRA || 0;
+      this.cameras.main.centerOn(WORLD_W / 2 + (window.VIEW_EXTRA_ON_RIGHT ? extra / 2 : -extra / 2), WORLD_H / 2);
       // 畫面上方的訂單列是網頁元素,不會跟著畫布縮放;把畫布實際顯示的比例告訴它,讓卡片大小跟遊戲畫面等比例。
       const shownHeight = this.game.canvas.getBoundingClientRect().height || WORLD_H;
       document.documentElement.style.setProperty('--hud-scale', (shownHeight / WORLD_H).toFixed(3));
     };
     applyZoom();
     this.scale.on('resize', applyZoom);
+    window.GAME_APPLY_VIEW = applyZoom; // 手機轉到另一個方向時 main.js 會叫這個,把多出來的地板換邊
 
     this.role = window.NET_ROLE;
     this.isHost = this.role === 'host';
@@ -599,6 +603,17 @@ class KitchenScene extends Phaser.Scene {
       Bgm.setVolume(Number(volumeSlider.value) / 100);
       showBgm();
     };
+    const sfxSlider = document.getElementById('sfx-volume');
+    const showSfx = () => {
+      sfxSlider.value = Math.round(Sfx.volume * 100);
+      document.getElementById('sfx-volume-label').textContent = Math.round(Sfx.volume * 100) + '%';
+    };
+    sfxSlider.oninput = () => {
+      Sfx.setVolume(Number(sfxSlider.value) / 100);
+      showSfx();
+    };
+    Sfx.start();
+    showSfx();
     Bgm.onChange = showBgm;
     document.getElementById('btn-bgm-next').onclick = () => Bgm.next();
     document.getElementById('btn-bgm-toggle').onclick = () => Bgm.toggle();
@@ -624,6 +639,11 @@ class KitchenScene extends Phaser.Scene {
     // 客人進來的門口(前台上方固定位置,見 OrderManager.js 的 CUSTOMER_ENTRANCE)。
     this.addText(CUSTOMER_ENTRANCE.x, 16, '🚪', { fontSize: '28px' }).setOrigin(0.5).setDepth(-1);
     this.add.image(WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setDepth(-2);
+    // 世界左右兩邊外面各鋪一張左右翻轉的地板(翻轉後接縫才對得起來):手機寬螢幕多出來的那一段會看到它,其他裝置看不到。
+    if (window.VIEW_EXTRA) {
+      this.add.image(-WORLD_W / 2, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setFlipX(true).setDepth(-2);
+      this.add.image(WORLD_W * 1.5, WORLD_H / 2, 'kitchen_bg').setDisplaySize(WORLD_W, WORLD_H).setFlipX(true).setDepth(-2);
+    }
     // 中間走道分隔線(半透明深色條),提示這裡兩邊都不能穿越
     this.add.rectangle(480, WORLD_H / 2, 36, WORLD_H, 0x2b2018, 0.35).setDepth(-1);
   }
@@ -811,7 +831,10 @@ class KitchenScene extends Phaser.Scene {
       this.orderBarRightAt = now;
       const info = document.getElementById('hud-right').getBoundingClientRect();
       const canvas = this.game.canvas.getBoundingClientRect();
-      this.orderBarRightX = canvas.width > 0 ? ((info.left - canvas.left) / canvas.width) * WORLD_W : WORLD_W;
+      // 畫布可能比世界寬(手機多出來的地板),所以用相機把螢幕位置換成世界座標。
+      const viewW = WORLD_W + (window.VIEW_EXTRA || 0);
+      const viewLeft = window.VIEW_EXTRA_ON_RIGHT ? 0 : -(window.VIEW_EXTRA || 0);
+      this.orderBarRightX = canvas.width > 0 ? viewLeft + ((info.left - canvas.left) / canvas.width) * viewW : WORLD_W;
     }
     return this.orderBarRightX;
   }

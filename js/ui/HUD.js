@@ -42,8 +42,11 @@ const HUD = {
         goal.className = 'star-goal' + (i < starsNow ? ' on' : '');
         const icons = document.createElement('span');
         icons.className = 'star' + (i < starsNow ? ' on' : '');
-        icons.textContent = '★'.repeat(i + 1);
-        goal.append(icons, ` $${need}`);
+        icons.textContent = '★';
+        const amount = document.createElement('span');
+        amount.className = 'star-amount';
+        amount.textContent = `$${need}`;
+        goal.append(icons, amount);
         this.starsEl.appendChild(goal);
       });
     }

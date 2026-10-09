@@ -8,7 +8,9 @@ const BGM_TRACKS = [
   { name: '廚房音樂 1', file: 'assets/audio/bgm/kitchen_bgm_1.mp3' },
   { name: '廚房音樂 2', file: 'assets/audio/bgm/kitchen_bgm_2.mp3' }
 ];
-const BGM_DEFAULT_VOLUME = 0.22; // 預設音量(0~1):要比音效小聲,不能蓋過煎肉/鈴聲。可以在暫停選單裡調
+const BGM_DEFAULT_VOLUME = 0.35; // 預設音量(滑桿的位置,0~1):要比音效小聲,不能蓋過煎肉/鈴聲。可以在暫停選單裡調
+const SFX_DEFAULT_VOLUME = 1; // 音效的預設音量(0~1),跟音樂分開調
+const SFX_STORAGE_KEY = 'coopCookingSfx';
 const BGM_STORAGE_KEY = 'coopCookingBgm';
 
 const Bgm = {
@@ -17,6 +19,41 @@ const Bgm = {
   enabled: true,
   volume: BGM_DEFAULT_VOLUME,
   onChange: null, // 換歌/開關之後呼叫,讓畫面更新顯示
+  gainNode: null, // 音樂的音量控制(見 _applyVolume)
+
+  // 滑桿位置換成實際音量:用平方,滑桿在小聲那一段比較好調(35% 的位置大約是 0.12 的音量)。
+  _gain() {
+    return this.volume * this.volume;
+  },
+
+  // iPhone 的瀏覽器不准網頁改 <audio> 的音量(audio.volume 設了沒有用,永遠是最大聲),
+  // 所以把音樂接到遊戲音效用的那個音訊系統(Web Audio)上,用它的音量控制(GainNode)來調。
+  // 接不上(瀏覽器不支援)就退回去改 audio.volume,電腦上一樣有效。
+  _applyVolume() {
+    if (!this.audio) return;
+    if (!this.gainNode) {
+      try {
+        const ctx = window.game && window.game.sound && window.game.sound.context;
+        if (ctx && ctx.createMediaElementSource) {
+          const source = ctx.createMediaElementSource(this.audio);
+          this.gainNode = ctx.createGain();
+          source.connect(this.gainNode);
+          this.gainNode.connect(ctx.destination);
+          this.audio.volume = 1;
+        }
+      } catch (e) {
+        this.gainNode = null;
+      }
+    }
+    if (this.gainNode) this.gainNode.gain.value = this._gain();
+    else this.audio.volume = this._gain();
+  },
+
+  // 接到 Web Audio 之後,音訊系統要是「啟動」的狀態才有聲音(手機要等使用者碰過畫面)。
+  _wake() {
+    const ctx = window.game && window.game.sound && window.game.sound.context;
+    if (ctx && ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
+  },
 
   _load() {
     try {
@@ -46,9 +83,11 @@ const Bgm = {
     this.index = Math.floor(Math.random() * BGM_TRACKS.length);
     this._play();
     const retry = () => {
+      this._wake();
       if (this.enabled && this.audio && this.audio.paused) this._play();
     };
     document.addEventListener('pointerdown', retry, { once: true });
+    document.addEventListener('touchend', retry, { once: true });
   },
 
   _play() {
@@ -58,7 +97,8 @@ const Bgm = {
       this.audio = new Audio();
       this.audio.loop = true;
     }
-    this.audio.volume = this.volume;
+    this._applyVolume();
+    this._wake();
     if (!this.audio.src.endsWith(track.file)) this.audio.src = track.file;
     const attempt = this.audio.play();
     if (attempt && attempt.catch) attempt.catch(() => {}); // 被瀏覽器擋下來不算錯,start() 會在第一次點擊時再試
@@ -83,11 +123,41 @@ const Bgm = {
   // 音量 0~1。調到 0 就是靜音(跟「關」不一樣:音樂還在播,只是聽不到)。
   setVolume(volume) {
     this.volume = Math.min(1, Math.max(0, volume));
-    if (this.audio) this.audio.volume = this.volume;
+    this._applyVolume();
     this._save();
   },
 
   label() {
     return this.enabled ? BGM_TRACKS[this.index].name : '(關閉)';
+  }
+};
+
+// 音效音量(煎肉、鈴聲、切菜...):跟音樂分開調,也記在這台裝置的瀏覽器裡。
+const Sfx = {
+  volume: SFX_DEFAULT_VOLUME,
+
+  // 進遊戲時呼叫一次,把存的音量套到遊戲的音效系統上。
+  start() {
+    try {
+      const saved = Number(localStorage.getItem(SFX_STORAGE_KEY));
+      if (localStorage.getItem(SFX_STORAGE_KEY) !== null && saved >= 0 && saved <= 1) this.volume = saved;
+    } catch (e) {
+      // 用預設
+    }
+    this._apply();
+  },
+
+  _apply() {
+    if (window.game && window.game.sound) window.game.sound.volume = this.volume;
+  },
+
+  setVolume(volume) {
+    this.volume = Math.min(1, Math.max(0, volume));
+    this._apply();
+    try {
+      localStorage.setItem(SFX_STORAGE_KEY, String(this.volume));
+    } catch (e) {
+      // 存不了就算了
+    }
   }
 };

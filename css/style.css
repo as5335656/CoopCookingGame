@@ -391,21 +391,25 @@ h2 {
 #hud-stars {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   background: rgba(58, 44, 32, 0.85);
   color: #f5ead9;
-  padding: 6px 12px;
+  padding: 3px 8px;
   border-radius: 10px;
   font-size: 18px;
   font-weight: 700;
   white-space: nowrap;
 }
 
-/* 每一個目標:「幾顆星 + 要多少收入」。還沒達到的整個是暗的,達到了就亮起來。 */
+/* 每一個目標:上面一顆星、下面是要多少收入(三個目標由左到右是 1 星、2 星、3 星)。還沒達到的整個是暗的,達到了就亮起來。 */
 .star-goal {
-  font-size: 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1.05;
+  font-size: 11px;
   font-weight: 600;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .star-goal.on {
@@ -414,7 +418,7 @@ h2 {
 }
 
 .star-goal .star {
-  font-size: 13px;
+  font-size: 15px;
   letter-spacing: 0;
 }
 
@@ -511,11 +515,13 @@ h2 {
   font-size: 14px;
 }
 
-#bgm-volume {
+#bgm-volume,
+#sfx-volume {
   width: 180px;
 }
 
-#bgm-volume-label {
+#bgm-volume-label,
+#sfx-volume-label {
   min-width: 36px;
   text-align: right;
 }

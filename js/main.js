@@ -297,9 +297,10 @@ window.addEventListener('orientationchange', () => {
     const h = Math.floor(view ? view.height : window.innerHeight);
     const viewLeft = Math.round(view ? view.offsetLeft : 0);
     const top = Math.round(view ? view.offsetTop : 0);
-    // 螢幕比遊戲畫面(16:9)寬的時候,多出來的寬度全部留在「鏡頭那一側」當黑邊,遊戲貼齊另一側。
+    // 螢幕比遊戲畫面寬的時候,多出來的寬度全部留在「鏡頭那一側」當黑邊,遊戲貼齊另一側。
+    // (遊戲畫面本身在手機上已經往鏡頭那一側多鋪了一段地板,見 measureViewExtra,所以黑邊只剩鏡頭那一小段。)
     // 手機逆時針轉成橫的(最常見的拿法)鏡頭在左邊;反過來拿鏡頭在右邊。判斷不出方向就當作在左邊。
-    const w = Math.min(fullW, Math.floor((h * 16) / 9));
+    const w = Math.min(fullW, Math.floor((h * (960 + (window.VIEW_EXTRA || 0))) / 540));
     const angle = screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : window.orientation;
     const cameraOnRight = angle === 270 || angle === -90;
     const bar = fullW - w;
@@ -307,6 +308,10 @@ window.addEventListener('orientationchange', () => {
     // 上方的時間/金額列跟著遊戲畫面對齊,不要壓在黑邊上。
     const hud = document.getElementById('hud-overlay');
     if (hud) Object.assign(hud.style, { left: (cameraOnRight ? 0 : bar) + 'px', right: (cameraOnRight ? bar : 0) + 'px', paddingLeft: '16px', paddingRight: '16px' });
+    if (window.VIEW_EXTRA_ON_RIGHT !== cameraOnRight) {
+      window.VIEW_EXTRA_ON_RIGHT = cameraOnRight;
+      if (window.GAME_APPLY_VIEW) window.GAME_APPLY_VIEW();
+    }
     const key = [w, h, left, top].join(',');
     if (key !== lastBox && w > 0 && h > 0) {
       lastBox = key;
@@ -326,6 +331,28 @@ window.addEventListener('orientationchange', () => {
     }
   }
 
+  // 手機橫放時螢幕比遊戲(16:9)寬很多:扣掉鏡頭/瀏海那一段(安全區)之後,剩下的寬度換算成世界座標,
+  // 讓畫布多畫這麼寬的地板(只是地板,不能走、也不放東西),這樣黑邊就只剩鏡頭那一小段。電腦不做這件事。
+  const VIEW_EXTRA_MAX = 240;
+  function measureViewExtra() {
+    if (!isPhoneOrTablet) return 0;
+    const view = window.visualViewport;
+    const a = view ? view.width : window.innerWidth;
+    const b = view ? view.height : window.innerHeight;
+    const long = Math.max(a, b);
+    const short = Math.min(a, b);
+    // 鏡頭那一段有多寬:問瀏覽器的安全區。直拿的時候左右是 0,那就用上面的(同一顆鏡頭,寬度差不多)。
+    const probe = document.createElement('div');
+    probe.style.cssText = 'position:fixed;visibility:hidden;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) 0 env(safe-area-inset-left,0px);';
+    document.body.appendChild(probe);
+    const cs = getComputedStyle(probe);
+    const inset = Math.max(parseFloat(cs.paddingTop) || 0, parseFloat(cs.paddingRight) || 0, parseFloat(cs.paddingLeft) || 0);
+    probe.remove();
+    if (!(short > 0)) return 0;
+    const extra = ((long - inset) * 540) / short - 960;
+    return Math.max(0, Math.min(VIEW_EXTRA_MAX, Math.floor(extra)));
+  }
+
   let gameStarted = false;
   function startGame() {
     if (gameStarted) return;
@@ -339,11 +366,12 @@ window.addEventListener('orientationchange', () => {
     // Safari 記憶體不夠時會直接把頁面重新載入(看起來就是「閃退回主選單」)。2 倍(1920x1080)肉眼幾乎看不出差別。
     const dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_SCALE);
     window.RENDER_SCALE = dpr;
+    window.VIEW_EXTRA = measureViewExtra();
     markGameRunning();
     window.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: 'game-canvas-container',
-      width: 960 * dpr,
+      width: (960 + window.VIEW_EXTRA) * dpr,
       height: 540 * dpr,
       scale: {
         mode: Phaser.Scale.FIT,
