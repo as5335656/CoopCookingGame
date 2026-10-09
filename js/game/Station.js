@@ -22,6 +22,12 @@ function tryGiveItemToPlayer(player, itemType) {
     else player.carrying = itemType;
     return true;
   }
+  // 茶包跟杯子先拿哪個都可以:手上先拿著茶包再到杯架,茶包會直接掛進剛拿到的杯子。
+  // (熱水還是要等杯子裡有茶包才接得到,見 canCupAccept。)
+  if (itemType === 'cup_empty' && TEA_BAGS.includes(player.carrying)) {
+    player.carrying = { isPlate: true, cup: true, items: [player.carrying] };
+    return true;
+  }
   if (typeof player.carrying === 'object' && player.carrying.isPlate) {
     if (!canContainerAccept(player.carrying, itemType)) return false;
     // 湊到哪一步都還是同一個盤子(記著一樣一樣的食材),剛好等於某份食譜時畫面會自動顯示成成品。

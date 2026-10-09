@@ -12,6 +12,7 @@ window.addEventListener('orientationchange', () => {
   const screens = {
     menu: document.getElementById('screen-menu'),
     levels: document.getElementById('screen-levels'),
+    lan: document.getElementById('screen-lan'),
     pairing: document.getElementById('screen-pairing'),
     game: document.getElementById('screen-game')
   };
@@ -94,11 +95,28 @@ window.addEventListener('orientationchange', () => {
     chooseLevel('建立房間:選擇關卡', '前一關至少拿到 1 星,下一關才會開放', true, createRoomForLevel);
   });
 
+  // 開房畫面上的房號跟 QR code。QR code 的內容是「這個遊戲的網址 + ?room=房號」,
+  // 對方用手機相機一掃就會打開遊戲並直接加入(見最下面的 autoJoinFromLink),不用打字。
+  function showRoomCode(code) {
+    roomCodeDisplay.textContent = code;
+    const img = document.getElementById('room-qr');
+    try {
+      const qr = qrcode(0, 'M');
+      qr.addData(location.origin + location.pathname + '?room=' + code);
+      qr.make();
+      img.src = qr.createDataURL(6, 2);
+      img.style.display = '';
+    } catch (e) {
+      img.style.display = 'none'; // 產生不出來就只顯示房號
+    }
+  }
+
   function createRoomForLevel(level) {
     window.NET_ROLE = 'host';
     window.SELECTED_LEVEL = level;
-    const code = pc.createRoom();
-    roomCodeDisplay.textContent = code;
+    showRoomCode(pc.createRoom());
+    // 掛上「區域網路」的招牌:同一個 Wi-Fi 的人按「區域網路」就看得到這間房(掛不上也沒關係,還有房號跟 QR code)。
+    LanLobby.advertise(() => ({ code: pc.roomCode, name: playerName(), level: window.SELECTED_LEVEL }));
     hostView.classList.remove('hidden');
     joinView.classList.add('hidden');
     pairingTitle.textContent = '建立房間';
@@ -117,31 +135,102 @@ window.addEventListener('orientationchange', () => {
     window.scrollTo(0, 0);
   }
   let typingOffTimer = null;
-  inputCode.addEventListener('focus', () => {
-    clearTimeout(typingOffTimer);
-    screens.menu.classList.add('typing');
-    fitMenuToKeyboard();
-  });
-  inputCode.addEventListener('blur', () => {
+  const inputName = document.getElementById('input-player-name');
+  const typingInputs = [inputCode, inputName];
+  for (const input of typingInputs) {
+    input.addEventListener('focus', () => {
+      clearTimeout(typingOffTimer);
+      for (const other of typingInputs) other.closest('.panel').classList.toggle('typing-now', other === input);
+      screens.menu.classList.add('typing');
+      fitMenuToKeyboard();
+    });
+  }
+  const endTyping = () => {
     // 晚一點再還原:點「加入房間」會先讓輸入框失焦,馬上還原的話按鈕會跑掉、那一下就點空了。
     typingOffTimer = setTimeout(() => {
+      for (const other of typingInputs) other.closest('.panel').classList.remove('typing-now');
       screens.menu.classList.remove('typing');
       screens.menu.style.top = '';
       screens.menu.style.height = '';
     }, 300);
-  });
+  };
   if (vv) {
     vv.addEventListener('resize', fitMenuToKeyboard);
     vv.addEventListener('scroll', fitMenuToKeyboard);
   }
+  for (const input of typingInputs) input.addEventListener('blur', endTyping);
   inputCode.addEventListener('keydown', (e) => {
     if (e.key !== 'Enter') return;
     inputCode.blur();
     btnJoin.click();
   });
 
-  btnJoin.addEventListener('click', () => {
-    const code = inputCode.value.trim().toUpperCase();
+  // 玩家名稱:開房時顯示在對方的「區域網路」清單上。記在這台裝置的瀏覽器裡,沒填就叫「玩家」。
+  const NAME_KEY = 'coopCookingName';
+  try {
+    inputName.value = localStorage.getItem(NAME_KEY) || '';
+  } catch (e) {
+    // 讀不到就空著
+  }
+  const playerName = () => inputName.value.trim().slice(0, 12) || '玩家';
+  inputName.addEventListener('change', () => {
+    try {
+      localStorage.setItem(NAME_KEY, inputName.value.trim().slice(0, 12));
+    } catch (e) {
+      // 存不了就算了
+    }
+  });
+  inputName.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') inputName.blur();
+  });
+
+  // 區域網路:列出同一個 Wi-Fi 底下正在開的房間,點一下就加入(做法見 LanLobby.js)。
+  const lanStatus = document.getElementById('lan-status');
+  const lanList = document.getElementById('lan-list');
+  function scanLan() {
+    lanList.textContent = '';
+    lanStatus.textContent = '正在找房間...';
+    let found = 0;
+    LanLobby.scan(
+      (room) => {
+        found += 1;
+        const btn = document.createElement('button');
+        btn.className = 'lan-room';
+        const who = document.createElement('span');
+        who.textContent = room.name + ' 的房間';
+        const detail = document.createElement('span');
+        detail.className = 'lan-room-detail';
+        detail.textContent = '關卡 1-' + room.level + ' · 房號 ' + room.code;
+        btn.append(who, detail);
+        btn.addEventListener('click', () => {
+          LanLobby.stopScanning();
+          joinRoomCode(room.code);
+        });
+        lanList.appendChild(btn);
+        lanStatus.textContent = '點一個房間加入';
+      },
+      (reason) => {
+        if (reason === 'no-network') lanStatus.textContent = '查不到這台裝置的網路資訊,區域網路這次不能用。請改用房號或 QR code。';
+        else if (reason === 'error') lanStatus.textContent = '連不上配對伺服器,請確認網路後按「重新整理」。';
+        else if (found === 0) lanStatus.textContent = '沒有找到房間。請確認對方已經開房,而且兩台連的是同一個 Wi-Fi。';
+      }
+    );
+  }
+  document.getElementById('btn-lan').addEventListener('click', () => {
+    menuError.textContent = '';
+    showScreen('lan');
+    scanLan();
+  });
+  document.getElementById('btn-lan-refresh').addEventListener('click', scanLan);
+  document.getElementById('btn-lan-back').addEventListener('click', () => {
+    LanLobby.stopScanning();
+    showScreen('menu');
+  });
+
+  btnJoin.addEventListener('click', () => joinRoomCode(inputCode.value));
+
+  function joinRoomCode(rawCode) {
+    const code = String(rawCode || '').trim().toUpperCase();
     if (code.length < 4) {
       menuError.textContent = '請輸入正確的房號';
       return;
@@ -157,10 +246,11 @@ window.addEventListener('orientationchange', () => {
     pairingStatus.textContent = '正在連線...';
     showScreen('pairing');
     bindConnEvents();
-  });
+  }
 
   function bindConnEvents() {
     pc.onOpen = () => {
+      LanLobby.stopAdvertising(); // 人到齊了,房間不用再出現在清單上
       if (window.NET_ROLE === 'host') {
         // 開房的人選的關卡要先告訴對方,兩邊才會進同一關。佈局也一起傳過去:
         // 自訂佈局只存在各自的瀏覽器裡,不傳的話對方會用它自己那一份(或內建的),兩邊站點位置對不起來。
@@ -193,6 +283,7 @@ window.addEventListener('orientationchange', () => {
   }
 
   btnCancel.addEventListener('click', () => {
+    LanLobby.stopAdvertising();
     pc.destroy();
     showScreen('menu');
   });
@@ -368,6 +459,19 @@ window.addEventListener('orientationchange', () => {
   }
 
   showScreen('menu');
+
+  // 掃 QR code 或點分享的連結進來的(網址有 ?room=房號):直接加入那個房間。
+  // 加入前先把網址上的 ?room= 拿掉,之後離開遊戲(重新載入頁面)才不會又自動連進去。
+  (function autoJoinFromLink() {
+    const m = /[?&]room=([A-Za-z0-9]{4,6})(&|$)/.exec(location.search);
+    if (!m) return;
+    try {
+      history.replaceState(null, '', location.pathname);
+    } catch (e) {
+      // 改不了網址就算了
+    }
+    joinRoomCode(m[1]);
+  })();
 
   // 編輯模式裡按了「切到另一關」:頁面重新載入後直接進那一關的編輯模式(見 KitchenScene.js 的 switchEditLevel)。
   const pendingEditLevel = readSession('coopEditLevel');

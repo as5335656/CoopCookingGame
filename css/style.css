@@ -93,13 +93,45 @@ h2 {
 }
 
 .room-code {
-  font-size: 48px;
+  font-size: 40px;
   font-weight: 700;
   letter-spacing: 8px;
   background: #3a2c20;
   border-radius: 16px;
-  padding: 16px 24px;
+  padding: 8px 20px;
   border: 2px solid #e8804a;
+}
+
+/* 開房畫面:左邊 QR code、右邊房號跟說明,橫放的手機一個畫面放得下。 */
+.room-share {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 20px;
+}
+
+.room-share-text {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  max-width: 340px;
+}
+
+.room-share-text p {
+  margin: 0;
+}
+
+.room-qr {
+  width: 150px;
+  height: 150px;
+  border-radius: 8px;
+  background: #fff;
+  image-rendering: pixelated;
+}
+
+.panel.hidden {
+  display: none;
 }
 
 .hint {
@@ -133,8 +165,88 @@ h2 {
   z-index: 50;
 }
 
-#screen-menu.typing > :not(.typing-keep) {
+/* 只留正在打字的那一排(main.js 會在那一排加上 typing-now)跟錯誤訊息。 */
+#screen-menu.typing > :not(.typing-now):not(#menu-error) {
   display: none;
+}
+
+.input-name {
+  flex: 1;
+  padding: 12px;
+  font-size: 16px;
+  text-align: center;
+  border-radius: 12px;
+  border: 2px solid #6b5a45;
+  background: #3a2c20;
+  color: #f5ead9;
+  min-width: 0;
+}
+
+/* 手機橫放時畫面很矮,主選單的按鈕一直排放不下:改成兩欄。 */
+@media (orientation: landscape) and (max-height: 520px) {
+  #screen-menu:not(.typing) {
+    flex-direction: row;
+    flex-wrap: wrap;
+    align-content: center;
+    padding: 12px 16px;
+    gap: 10px 16px;
+  }
+  #screen-menu:not(.typing) > h1,
+  #screen-menu:not(.typing) > #menu-error {
+    flex-basis: 100%;
+    margin: 0;
+  }
+  #screen-menu:not(.typing) > h1 {
+    font-size: 22px;
+  }
+  #screen-menu:not(.typing) > .panel {
+    width: 310px;
+    max-width: 46%;
+  }
+  #screen-menu:not(.typing) .btn {
+    padding: 11px 10px;
+    font-size: 15px;
+  }
+  #screen-menu:not(.typing) .input-code {
+    padding: 9px;
+    font-size: 18px;
+  }
+  #screen-menu:not(.typing) .input-name {
+    padding: 9px;
+  }
+}
+
+/* ---- 區域網路的房間清單 ---- */
+
+#lan-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 45dvh;
+  overflow-y: auto;
+}
+
+.lan-room {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  background: #e8804a;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+}
+
+.lan-room .lan-room-detail {
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0.9;
 }
 
 #version-label {
