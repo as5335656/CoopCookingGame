@@ -338,7 +338,6 @@ window.addEventListener('orientationchange', () => {
   // 電腦視窗比 16:9 寬的時候也一樣多鋪(電腦沒有鏡頭,安全區是 0),兩邊看到的畫面才會一樣。
   const VIEW_EXTRA_MAX = 240;
   function measureViewExtra() {
-    if (window.EDIT_MODE) return 0; // 編輯佈局時維持原本的畫面,不多鋪地板
     const view = window.visualViewport;
     const a = view ? view.width : window.innerWidth;
     const b = view ? view.height : window.innerHeight;

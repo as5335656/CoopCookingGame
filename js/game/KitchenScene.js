@@ -37,6 +37,7 @@ const HUD_CHIPS_BOTTOM = 66; // 右上角那排資訊(星星目標/收入/齒輪
 const ORDER_BAR_BOTTOM = 134; // 畫面上方訂單列的下緣(世界座標 y);客人頭上的泡泡要在這條線以下才看得到
 const OVERLAY_DEPTH = 20; // 進度條、客人的對話泡泡:畫在所有站點跟角色的上面
 const EDIT_GRID_SIZE = 8; // 編輯模式拖曳物件時,座標會對齊到這個格線大小,方便排整齊
+const EDIT_EDGE_MARGIN = 16; // 編輯模式拖物件時,物件中心至少要離場地邊緣這麼遠
 const EDIT_SNAP_DIST = 7; // 編輯模式拖曳:離附近物件的對齊線這麼近就吸過去
 const EDIT_SNAP_RANGE = 80; // 只跟這個距離內的物件對齊
 
@@ -337,7 +338,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.71';
+    const v = '?v=1.72';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -1378,8 +1379,9 @@ class KitchenScene extends Phaser.Scene {
       if (this.deleteMode || this.pendingGadgetType) return; // 刪除/放置模式下不要順便被拖走
       const snapped = this.snapDragPosition(gameObject.stationId, dragX, dragY);
       const resolved = this.resolveCollision(gameObject.stationId, snapped.x, snapped.y, this.sizes[gameObject.stationId]);
-      gameObject.x = resolved.x;
-      gameObject.y = resolved.y;
+      // 物件只能放在場地(0-960 x 0-540)裡面:寬螢幕左邊多鋪的那段地板只是裝飾,不能擺東西。
+      gameObject.x = Phaser.Math.Clamp(resolved.x, EDIT_EDGE_MARGIN, WORLD_W - EDIT_EDGE_MARGIN);
+      gameObject.y = Phaser.Math.Clamp(resolved.y, EDIT_EDGE_MARGIN, WORLD_H - EDIT_EDGE_MARGIN);
     });
 
     this.input.on('dragend', (pointer, gameObject) => {
