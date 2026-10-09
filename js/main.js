@@ -304,10 +304,12 @@ window.addEventListener('orientationchange', () => {
     const angle = screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : window.orientation;
     const cameraOnRight = angle === 270 || angle === -90;
     const bar = fullW - w;
-    const left = viewLeft + (cameraOnRight ? 0 : bar);
+    // 電腦沒有鏡頭:視窗還是比遊戲畫面寬的話(超寬螢幕),黑邊左右各一半、畫面置中。
+    const barLeft = isPhoneOrTablet ? (cameraOnRight ? 0 : bar) : Math.floor(bar / 2);
+    const left = viewLeft + barLeft;
     // 上方的時間/金額列跟著遊戲畫面對齊,不要壓在黑邊上。
     const hud = document.getElementById('hud-overlay');
-    if (hud) Object.assign(hud.style, { left: (cameraOnRight ? 0 : bar) + 'px', right: (cameraOnRight ? bar : 0) + 'px', paddingLeft: '16px', paddingRight: '16px' });
+    if (hud) Object.assign(hud.style, { left: barLeft + 'px', right: bar - barLeft + 'px', paddingLeft: '16px', paddingRight: '16px' });
     if (window.VIEW_EXTRA_ON_RIGHT !== cameraOnRight) {
       window.VIEW_EXTRA_ON_RIGHT = cameraOnRight;
       if (window.GAME_APPLY_VIEW) window.GAME_APPLY_VIEW();
@@ -332,15 +334,17 @@ window.addEventListener('orientationchange', () => {
   }
 
   // 手機橫放時螢幕比遊戲(16:9)寬很多:扣掉鏡頭/瀏海那一段(安全區)之後,剩下的寬度換算成世界座標,
-  // 讓畫布多畫這麼寬的地板(只是地板,不能走、也不放東西),這樣黑邊就只剩鏡頭那一小段。電腦不做這件事。
+  // 讓畫布多畫這麼寬的地板(只是地板,不能走、也不放東西),這樣黑邊就只剩鏡頭那一小段。
+  // 電腦視窗比 16:9 寬的時候也一樣多鋪(電腦沒有鏡頭,安全區是 0),兩邊看到的畫面才會一樣。
   const VIEW_EXTRA_MAX = 240;
   function measureViewExtra() {
-    if (!isPhoneOrTablet) return 0;
+    if (window.EDIT_MODE) return 0; // 編輯佈局時維持原本的畫面,不多鋪地板
     const view = window.visualViewport;
     const a = view ? view.width : window.innerWidth;
     const b = view ? view.height : window.innerHeight;
-    const long = Math.max(a, b);
-    const short = Math.min(a, b);
+    // 手機可能是直拿著進遊戲的(之後才轉橫),所以用長邊當寬;電腦視窗就照實際的寬高算,視窗不夠寬就不多鋪。
+    const long = isPhoneOrTablet ? Math.max(a, b) : a;
+    const short = isPhoneOrTablet ? Math.min(a, b) : b;
     // 鏡頭那一段有多寬:問瀏覽器的安全區。直拿的時候左右是 0,那就用上面的(同一顆鏡頭,寬度差不多)。
     const probe = document.createElement('div');
     probe.style.cssText = 'position:fixed;visibility:hidden;padding:env(safe-area-inset-top,0px) env(safe-area-inset-right,0px) 0 env(safe-area-inset-left,0px);';
