@@ -3,7 +3,10 @@
 
 const WORLD_W = 960;
 const WORLD_H = 540;
-const MOVE_SPEED = 220; // px/sec
+const MOVE_SPEED = 220;
+const MOVE_SEND_INTERVAL_MS = 50; // 每隔多久把自己的位置傳給對方
+const REMOTE_CATCH_UP_S = 0.1; // 對方角色落後時,大約花多久追上最新位置
+const REMOTE_SNAP_DIST = 200; // 落後超過這個距離就不慢慢走了,直接跳過去 // px/sec
 // 互動距離:玩家的方塊跟站點的方塊之間最多可以隔多遠還算「碰得到」。
 // 用方形(不是圓形半徑)判定,這樣站在站點斜對角也算碰得到——L 型流理台轉角那一格
 // 只能從斜對角靠近,用圓形半徑量會永遠差一點點,變成怎麼點都走不過去。
@@ -334,7 +337,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.66';
+    const v = '?v=1.67';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -922,7 +925,7 @@ class KitchenScene extends Phaser.Scene {
         this.updateLocalMovement(delta);
         this.handleInteractInput();
       }
-      this.updateRemoteMovement();
+      this.updateRemoteMovement(delta);
     }
 
     if (this.isHost && this.state && !this.editMode) {
@@ -1786,15 +1789,26 @@ class KitchenScene extends Phaser.Scene {
     this.updateFacing(this.role, this.localPos.x);
   }
 
-  updateRemoteMovement() {
+  updateRemoteMovement(delta) {
+    // 對方的位置是每隔幾十毫秒才收到一次,直接跳過去看起來會一格一格的。
+    // 改成每一幀朝「最新收到的位置」走過去:平常用走路的速度,落後比較多就加快(大約 0.1 秒內追上),差太遠才直接跳。
     const remote = this.playerSprites[this.remoteRole];
-    remote.container.setPosition(remote.targetX, remote.targetY);
-    remote.x = remote.targetX;
-    remote.y = remote.targetY;
-    this.updateFacing(this.remoteRole, remote.targetX);
+    const dx = remote.targetX - remote.x;
+    const dy = remote.targetY - remote.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist > REMOTE_SNAP_DIST || dist < 0.5) {
+      remote.x = remote.targetX;
+      remote.y = remote.targetY;
+    } else {
+      const step = Math.min(dist, Math.max(MOVE_SPEED, dist / REMOTE_CATCH_UP_S) * (delta / 1000));
+      remote.x += (dx / dist) * step;
+      remote.y += (dy / dist) * step;
+    }
+    remote.container.setPosition(remote.x, remote.y);
+    this.updateFacing(this.remoteRole, remote.x);
 
     const now = performance.now();
-    if (now - this.lastMoveSent > 80) {
+    if (now - this.lastMoveSent > MOVE_SEND_INTERVAL_MS) {
       this.lastMoveSent = now;
       GameSync.sendMove(this.localPos.x, this.localPos.y);
     }

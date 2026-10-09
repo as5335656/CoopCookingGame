@@ -107,6 +107,39 @@ window.addEventListener('orientationchange', () => {
     bindConnEvents();
   }
 
+  // 輸入房號時鍵盤會蓋住畫面(手機橫放時只剩上面一小條):把主選單縮成只剩輸入框那一排,
+  // 並對齊到鍵盤上方實際看得到的區域(visualViewport),輸入框跟「加入房間」才點得到。
+  const vv = window.visualViewport;
+  function fitMenuToKeyboard() {
+    if (!screens.menu.classList.contains('typing')) return;
+    screens.menu.style.top = (vv ? vv.offsetTop : 0) + 'px';
+    screens.menu.style.height = (vv ? vv.height : window.innerHeight) + 'px';
+    window.scrollTo(0, 0);
+  }
+  let typingOffTimer = null;
+  inputCode.addEventListener('focus', () => {
+    clearTimeout(typingOffTimer);
+    screens.menu.classList.add('typing');
+    fitMenuToKeyboard();
+  });
+  inputCode.addEventListener('blur', () => {
+    // 晚一點再還原:點「加入房間」會先讓輸入框失焦,馬上還原的話按鈕會跑掉、那一下就點空了。
+    typingOffTimer = setTimeout(() => {
+      screens.menu.classList.remove('typing');
+      screens.menu.style.top = '';
+      screens.menu.style.height = '';
+    }, 300);
+  });
+  if (vv) {
+    vv.addEventListener('resize', fitMenuToKeyboard);
+    vv.addEventListener('scroll', fitMenuToKeyboard);
+  }
+  inputCode.addEventListener('keydown', (e) => {
+    if (e.key !== 'Enter') return;
+    inputCode.blur();
+    btnJoin.click();
+  });
+
   btnJoin.addEventListener('click', () => {
     const code = inputCode.value.trim().toUpperCase();
     if (code.length < 4) {
@@ -164,14 +197,15 @@ window.addEventListener('orientationchange', () => {
     showScreen('menu');
   });
 
-  // 本機測試跟編輯佈局是開發用的:只在電腦上顯示,手機(跟平板)打開看不到這兩顆按鈕,玩家只會看到建立房間/加入房間。
+  // 編輯佈局是開發用的:只在電腦上顯示,手機(跟平板)打開看不到。本機測試目前在手機上也開著(方便一支手機自己測)。
   // 判斷方式:瀏覽器自己報的裝置類型是手機/平板(iPad 會自稱 Mac,所以另外用「Mac + 多點觸控」認)。
-  // 開發時要在手機上用這兩個功能,網址後面加 ?dev=1 就會顯示。
+  // 要在手機上用編輯佈局,網址後面加 ?dev=1 就會顯示。
   const ua = navigator.userAgent || '';
   const isPhoneOrTablet = /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || (/Macintosh/i.test(ua) && navigator.maxTouchPoints > 1);
+  const PHONE_HIDDEN_BUTTONS = ['btn-edit-layout']; // 要把本機測試也藏起來,就把 'btn-local-test' 加回這裡
   const showDevTools = !isPhoneOrTablet || /[?&]dev=1(&|$)/.test(location.search);
   if (!showDevTools) {
-    for (const id of ['btn-local-test', 'btn-edit-layout']) {
+    for (const id of PHONE_HIDDEN_BUTTONS) {
       const panel = document.getElementById(id).closest('.panel');
       if (panel) panel.style.display = 'none';
     }

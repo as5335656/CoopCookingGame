@@ -119,6 +119,24 @@ h2 {
   color: #ff6b6b;
 }
 
+/* 手機橫放時鍵盤會蓋掉大半個畫面:輸入房號的時候只留輸入框那一排,並貼在「鍵盤上方還看得到的區域」的最上面
+   (位置跟高度由 main.js 照 visualViewport 設定),不然輸入框會被擠出畫面、點不到。 */
+#screen-menu.typing {
+  position: fixed;
+  left: 0;
+  top: 0;
+  justify-content: flex-start;
+  padding-top: 8px;
+  padding-bottom: 0;
+  gap: 6px;
+  background: #2b2018;
+  z-index: 50;
+}
+
+#screen-menu.typing > :not(.typing-keep) {
+  display: none;
+}
+
 #version-label {
   position: fixed;
   right: 10px;
@@ -188,6 +206,7 @@ h2 {
 
 
 .game-screen {
+  overflow: hidden;
   padding: 0;
   position: relative;
   justify-content: flex-start;
@@ -226,9 +245,12 @@ h2 {
   }
 }
 
+/* 一定要脫離排版(absolute)並固定成跟畫面一樣大:Phaser 是照這個容器的大小來縮放畫布的,
+   如果容器會被裡面的畫布撐高(iPhone Safari 上會),Phaser 就會以為有更高的空間,把畫布放到比螢幕還高,上下被切掉。 */
 #game-canvas-container {
-  width: 100%;
-  height: 100%;
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
 }
 
 #game-canvas-container canvas {
