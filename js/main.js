@@ -300,14 +300,11 @@ window.addEventListener('orientationchange', () => {
     const h = Math.floor(view ? view.height : window.innerHeight);
     const viewLeft = Math.round(view ? view.offsetLeft : 0);
     const top = Math.round(view ? view.offsetTop : 0);
-    // 螢幕比遊戲畫面寬的時候,多出來的寬度全部留在「鏡頭那一側」當黑邊,遊戲貼齊另一側。
-    // 手機逆時針轉成橫的(最常見的拿法)鏡頭在左邊;反過來拿鏡頭在右邊。判斷不出方向就當作在左邊。
+    // 螢幕比遊戲畫面寬的時候(手機橫放、超寬螢幕),多出來的寬度左右各一半當黑邊,遊戲畫面置中。
+    // (iPhone 橫放時每邊的黑邊比鏡頭那一段還寬,所以鏡頭不會擋到遊戲。)
     const w = Math.min(fullW, Math.floor((h * GAME_VIEW_W) / GAME_VIEW_H));
-    const angle = screen.orientation && typeof screen.orientation.angle === 'number' ? screen.orientation.angle : window.orientation;
-    const cameraOnRight = angle === 270 || angle === -90;
     const bar = fullW - w;
-    // 電腦沒有鏡頭:視窗還是比遊戲畫面寬的話(超寬螢幕),黑邊左右各一半、畫面置中。
-    const barLeft = isPhoneOrTablet ? (cameraOnRight ? 0 : bar) : Math.floor(bar / 2);
+    const barLeft = Math.floor(bar / 2);
     const left = viewLeft + barLeft;
     // 上方的時間/金額列跟著遊戲畫面對齊,不要壓在黑邊上。
     const hud = document.getElementById('hud-overlay');
