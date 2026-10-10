@@ -168,12 +168,26 @@ h2 {
 }
 
 #screen-menu .btn,
-#screen-menu .input-code,
 #screen-menu .input-name {
   box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
 }
 
-#screen-menu .input-code,
+/* 主選單的按鈕比其他畫面的小一號,背景圖才露得出來。 */
+#screen-menu .panel {
+  max-width: 250px;
+}
+
+#screen-menu .btn {
+  padding: 9px 14px;
+  font-size: 15px;
+}
+
+/* 輸入框的字不能小於 16px:iPhone 的 Safari 點到字比較小的輸入框會自動把整頁放大。 */
+#screen-menu .input-name {
+  padding: 7px;
+  font-size: 16px;
+}
+
 #screen-menu .input-name {
   background: rgba(58, 44, 32, 0.92);
 }
@@ -236,19 +250,15 @@ h2 {
     font-size: 22px;
   }
   #screen-menu:not(.typing) > .panel {
-    width: 310px;
-    max-width: 46%;
+    width: 200px;
+    max-width: 30%;
   }
   #screen-menu:not(.typing) .btn {
-    padding: 11px 10px;
-    font-size: 15px;
-  }
-  #screen-menu:not(.typing) .input-code {
-    padding: 9px;
-    font-size: 18px;
+    padding: 8px 10px;
+    font-size: 14px;
   }
   #screen-menu:not(.typing) .input-name {
-    padding: 9px;
+    padding: 6px;
   }
 }
 

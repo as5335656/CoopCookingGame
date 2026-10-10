@@ -78,8 +78,6 @@ window.addEventListener('orientationchange', () => {
   document.getElementById('btn-levels-back').addEventListener('click', () => showScreen('menu'));
 
   const btnCreate = document.getElementById('btn-create-room');
-  const btnJoin = document.getElementById('btn-join-room');
-  const inputCode = document.getElementById('input-room-code');
   const menuError = document.getElementById('menu-error');
 
   const pairingTitle = document.getElementById('pairing-title');
@@ -125,7 +123,7 @@ window.addEventListener('orientationchange', () => {
     bindConnEvents();
   }
 
-  // 輸入房號時鍵盤會蓋住畫面(手機橫放時只剩上面一小條):把主選單縮成只剩輸入框那一排,
+  // 打字時鍵盤會蓋住畫面(手機橫放時只剩上面一小條):把主選單縮成只剩輸入框那一排,
   // 並對齊到鍵盤上方實際看得到的區域(visualViewport),輸入框跟「加入房間」才點得到。
   const vv = window.visualViewport;
   function fitMenuToKeyboard() {
@@ -136,7 +134,7 @@ window.addEventListener('orientationchange', () => {
   }
   let typingOffTimer = null;
   const inputName = document.getElementById('input-player-name');
-  const typingInputs = [inputCode, inputName];
+  const typingInputs = [inputName];
   for (const input of typingInputs) {
     input.addEventListener('focus', () => {
       clearTimeout(typingOffTimer);
@@ -146,7 +144,7 @@ window.addEventListener('orientationchange', () => {
     });
   }
   const endTyping = () => {
-    // 晚一點再還原:點「加入房間」會先讓輸入框失焦,馬上還原的話按鈕會跑掉、那一下就點空了。
+    // 晚一點再還原:馬上還原的話畫面會跳一下,剛好點在按鈕上的那一下會點空。
     typingOffTimer = setTimeout(() => {
       for (const other of typingInputs) other.closest('.panel').classList.remove('typing-now');
       screens.menu.classList.remove('typing');
@@ -159,11 +157,6 @@ window.addEventListener('orientationchange', () => {
     vv.addEventListener('scroll', fitMenuToKeyboard);
   }
   for (const input of typingInputs) input.addEventListener('blur', endTyping);
-  inputCode.addEventListener('keydown', (e) => {
-    if (e.key !== 'Enter') return;
-    inputCode.blur();
-    btnJoin.click();
-  });
 
   // 玩家名稱:開房時顯示在對方的「區域網路」清單上。記在這台裝置的瀏覽器裡,沒填就叫「玩家」。
   const NAME_KEY = 'coopCookingName';
@@ -210,7 +203,7 @@ window.addEventListener('orientationchange', () => {
         lanStatus.textContent = '點一個房間加入';
       },
       (reason) => {
-        if (reason === 'no-network') lanStatus.textContent = '查不到這台裝置的網路資訊,區域網路這次不能用。請改用房號或 QR code。';
+        if (reason === 'no-network') lanStatus.textContent = '查不到這台裝置的網路資訊,區域網路這次不能用。請對方開房後讓你掃 QR code。';
         else if (reason === 'error') lanStatus.textContent = '連不上配對伺服器,請確認網路後按「重新整理」。';
         else if (found === 0) lanStatus.textContent = '沒有找到房間。請確認對方已經開房,而且兩台連的是同一個 Wi-Fi。';
       }
@@ -227,12 +220,11 @@ window.addEventListener('orientationchange', () => {
     showScreen('menu');
   });
 
-  btnJoin.addEventListener('click', () => joinRoomCode(inputCode.value));
-
+  // 加入房間:主選單沒有輸入房號的地方了,房號是從「區域網路」清單或 QR code 的連結(?room=)帶進來的。
   function joinRoomCode(rawCode) {
     const code = String(rawCode || '').trim().toUpperCase();
     if (code.length < 4) {
-      menuError.textContent = '請輸入正確的房號';
+      menuError.textContent = '房號不正確';
       return;
     }
     menuError.textContent = '';
