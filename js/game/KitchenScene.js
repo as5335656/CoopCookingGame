@@ -344,7 +344,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.79';
+    const v = '?v=1.80';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -640,6 +640,7 @@ class KitchenScene extends Phaser.Scene {
     document.getElementById('btn-bgm-next').onclick = () => Bgm.next();
     document.getElementById('btn-bgm-toggle').onclick = () => Bgm.toggle();
     if (!this.editMode) Bgm.start();
+    else Bgm.stop();
     showBgm();
     if (this.isHost && !this.localTestMode) {
       GameSync.onPauseRequest = (paused) => {

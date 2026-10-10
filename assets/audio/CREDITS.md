@@ -22,6 +22,7 @@
 | --- | --- | --- |
 | `kitchen_bgm_1.mp3` | 廚房音樂 1 | `gemini_generated_video_2D47833D.mp4` |
 | `kitchen_bgm_2.mp3` | 廚房音樂 2 | `gemini_generated_video_8FDBD567.mp4` |
+| `menu_bgm.mp3` | 主選單音樂(主選單、選關卡、開房畫面播放) | `A_Pinch_of_Chaos.mp3`(專案作者提供;**來源與授權待作者確認**) |
 
 處理方式:只取聲音、去掉頭尾的靜音(循環播放才不會有空白)、兩首調到一樣的響度,壓成 128kbps 的 mp3。
 

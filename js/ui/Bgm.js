@@ -8,6 +8,8 @@ const BGM_TRACKS = [
   { name: '廚房音樂 1', file: 'assets/audio/bgm/kitchen_bgm_1.mp3' },
   { name: '廚房音樂 2', file: 'assets/audio/bgm/kitchen_bgm_2.mp3' }
 ];
+// 主選單(還沒進遊戲:主選單、選關卡、開房/加入房間的畫面)播的音樂。進遊戲後換成上面的廚房音樂。
+const MENU_TRACK = { name: '主選單音樂', file: 'assets/audio/bgm/menu_bgm.mp3' };
 const BGM_DEFAULT_VOLUME = 0.35; // 預設音量(滑桿的位置,0~1):要比音效小聲,不能蓋過煎肉/鈴聲。可以在暫停選單裡調
 const SFX_DEFAULT_VOLUME = 1; // 音效的預設音量(0~1),跟音樂分開調
 const SFX_STORAGE_KEY = 'coopCookingSfx';
@@ -20,6 +22,13 @@ const Bgm = {
   volume: BGM_DEFAULT_VOLUME,
   onChange: null, // 換歌/開關之後呼叫,讓畫面更新顯示
   gainNode: null, // 音樂的音量控制(見 _applyVolume)
+  inMenu: false, // 現在播的是主選單音樂還是遊戲裡的廚房音樂
+
+  // 遊戲音效用的音訊系統(Web Audio)。main.js 一載入就建好一個、之後一直共用,所以在主選單(還沒有 Phaser 遊戲)也拿得到。
+  _context() {
+    if (window.getSharedAudioContext) return window.getSharedAudioContext();
+    return (window.game && window.game.sound && window.game.sound.context) || null;
+  },
 
   // 滑桿位置換成實際音量:用平方,滑桿在小聲那一段比較好調(35% 的位置大約是 0.12 的音量)。
   _gain() {
@@ -33,7 +42,7 @@ const Bgm = {
     if (!this.audio) return;
     if (!this.gainNode) {
       try {
-        const ctx = window.game && window.game.sound && window.game.sound.context;
+        const ctx = this._context();
         if (ctx && ctx.createMediaElementSource) {
           const source = ctx.createMediaElementSource(this.audio);
           this.gainNode = ctx.createGain();
@@ -51,7 +60,7 @@ const Bgm = {
 
   // 接到 Web Audio 之後,音訊系統要是「啟動」的狀態才有聲音(手機要等使用者碰過畫面)。
   _wake() {
-    const ctx = window.game && window.game.sound && window.game.sound.context;
+    const ctx = this._context();
     if (ctx && ctx.state === 'suspended' && ctx.resume) ctx.resume().catch(() => {});
   },
 
@@ -76,9 +85,24 @@ const Bgm = {
     }
   },
 
+  // 主選單畫面一出來就呼叫:播主選單音樂(開關跟音量跟遊戲裡共用同一份設定)。
+  // 瀏覽器不准網頁一打開就自己出聲,所以實際上是使用者第一次碰畫面的那一刻才開始播。
+  startMenu() {
+    this._load();
+    this.inMenu = true;
+    this._play();
+    const retry = () => {
+      this._wake();
+      if (this.inMenu && this.enabled && this.audio && this.audio.paused) this._play();
+    };
+    document.addEventListener('pointerdown', retry, { once: true });
+    document.addEventListener('touchend', retry, { once: true });
+  },
+
   // 進遊戲時呼叫一次。瀏覽器(尤其是手機)可能要等使用者碰過畫面才准播,被擋下來的話等第一次點擊再播。
   start() {
     this._load();
+    this.inMenu = false;
     // 每次進遊戲隨機挑一首(開關跟音量照上次的設定);想換可以在暫停選單按「換一首」。
     this.index = Math.floor(Math.random() * BGM_TRACKS.length);
     this._play();
@@ -92,7 +116,7 @@ const Bgm = {
 
   _play() {
     if (!this.enabled) return;
-    const track = BGM_TRACKS[this.index];
+    const track = this.inMenu ? MENU_TRACK : BGM_TRACKS[this.index];
     if (!this.audio) {
       this.audio = new Audio();
       this.audio.loop = true;
@@ -102,6 +126,12 @@ const Bgm = {
     if (!this.audio.src.endsWith(track.file)) this.audio.src = track.file;
     const attempt = this.audio.play();
     if (attempt && attempt.catch) attempt.catch(() => {}); // 被瀏覽器擋下來不算錯,start() 會在第一次點擊時再試
+  },
+
+  // 停掉音樂(進編輯佈局的時候用:編輯模式不播音樂)。
+  stop() {
+    this.inMenu = false;
+    if (this.audio) this.audio.pause();
   },
 
   next() {

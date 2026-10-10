@@ -480,6 +480,8 @@ window.addEventListener('orientationchange', () => {
     // 忽略
   }
 
+  window.getSharedAudioContext = getAudioContext; // 背景音樂(Bgm.js)也用同一個,主選單就能調音量
+
   let gameStarted = false;
   let screenListenersBound = false;
   function startGame() {
@@ -564,6 +566,7 @@ window.addEventListener('orientationchange', () => {
   }
 
   showScreen('menu');
+  Bgm.startMenu(); // 主選單音樂(進遊戲後 KitchenScene 會換成廚房音樂)
 
   // 掃 QR code 或點分享的連結進來的(網址有 ?room=房號):直接加入那個房間。
   // 加入前先把網址上的 ?room= 拿掉,之後離開遊戲(重新載入頁面)才不會又自動連進去。
