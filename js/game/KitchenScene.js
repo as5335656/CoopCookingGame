@@ -344,7 +344,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.75';
+    const v = '?v=1.76';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -493,18 +493,38 @@ class KitchenScene extends Phaser.Scene {
     document.getElementById('hud-orders').innerHTML = '';
     this.setupPauseMenu();
 
+    // 結算畫面的按鈕:下一關 / 再玩一次 / 回主畫面。
+    // 只有 Host 能換關卡跟重開(它是遊戲狀態的權威端);Joiner 只看得到「回主畫面」,等 Host 選,
+    // Host 選了之後 Joiner 這邊會自動跟著換(再玩一次是靠狀態同步,下一關是靠 GameSync 的 level 訊息)。
     const playAgainBtn = document.getElementById('btn-play-again');
+    const nextBtn = document.getElementById('btn-next-level');
+    const waitEl = document.getElementById('result-wait');
+    document.getElementById('btn-result-menu').onclick = () => location.reload(); // 重新載入 = 回主選單,連線也一起斷開
+    playAgainBtn.classList.toggle('hidden', !this.isHost);
+    nextBtn.classList.toggle('hidden', !this.isHost || this.level >= LEVEL_COUNT);
+    waitEl.textContent = this.isHost ? '' : '等待開房的人選擇「下一關」或「再玩一次」...';
     if (this.isHost) {
-      playAgainBtn.textContent = '再玩一次';
       playAgainBtn.onclick = () => {
         this.state = createInitialState(this.level);
       };
-    } else {
-      // 只有 Host 能重開一局(它是遊戲狀態的權威端),Joiner 端顯示等待訊息即可,
-      // 等 Host 重開後,下一次狀態同步就會自動讓 Joiner 的結算畫面消失。
-      playAgainBtn.textContent = '等待主機重新開始...';
-      playAgainBtn.disabled = true;
+      nextBtn.onclick = () => {
+        if (!this.canGoNextLevel()) return;
+        window.goToLevel(this.level + 1);
+      };
     }
+    this.refreshNextLevelButton = () => {
+      if (!this.isHost || this.level >= LEVEL_COUNT) return;
+      const ok = this.canGoNextLevel();
+      nextBtn.disabled = !ok;
+      nextBtn.textContent = ok ? '下一關(1-' + (this.level + 1) + ')' : '下一關(要先拿到 1 星)';
+    };
+    this.refreshNextLevelButton();
+  }
+
+  // 可不可以進下一關:跟選關畫面同一條規則(這一關至少 1 星);本機測試不受限制。
+  canGoNextLevel() {
+    if (this.level >= LEVEL_COUNT) return false;
+    return this.localTestMode || Progress.isUnlocked(this.level + 1);
   }
 
   // 畫面上方的訂單列:每一位「已經坐下點餐、還沒拿到餐」的客人一張小卡片——上面是成品的大圖示,
@@ -2169,6 +2189,7 @@ class KitchenScene extends Phaser.Scene {
     this.updateCookingSounds(state);
     this.updateOrderBar(state);
     HUD.update(state);
+    if (state.ended) this.refreshNextLevelButton(); // 結算時星數才記進去,「下一關」能不能按要重新看一次
   }
 
   // 把一位客人畫在該在的位置:還在走過來就照路徑走到一半的位置,坐下之後就在椅子上。

@@ -419,11 +419,80 @@ window.addEventListener('orientationchange', () => {
     }
   }
 
+  // 遊戲的音訊系統自己建一個、每次建遊戲都傳同一個進去:換關卡要把整個 Phaser 遊戲拆掉重建,
+  // 讓 Phaser 自己建的話會跟著被關掉,手機上新的要等使用者再碰一次畫面才有聲音,背景音樂的音量控制也會斷線。
+  let sharedAudioContext = null;
+  function getAudioContext() {
+    if (!sharedAudioContext) {
+      const Ctor = window.AudioContext || window.webkitAudioContext;
+      if (Ctor) {
+        try {
+          sharedAudioContext = new Ctor();
+        } catch (e) {
+          sharedAudioContext = null;
+        }
+      }
+    }
+    return sharedAudioContext;
+  }
+
   let gameStarted = false;
+  let screenListenersBound = false;
   function startGame() {
     if (gameStarted) return;
     gameStarted = true;
     showScreen('game');
+    buildGame();
+
+    if (!screenListenersBound) {
+      screenListenersBound = true;
+      if (window.visualViewport) {
+        window.visualViewport.addEventListener('resize', fitGameToScreen);
+        window.visualViewport.addEventListener('scroll', fitGameToScreen);
+      }
+      window.addEventListener('resize', fitGameToScreen);
+      window.addEventListener('orientationchange', fitGameToScreen);
+      setInterval(fitGameToScreen, 500); // 手機轉向時瀏覽器回報的尺寸有時會慢半拍,定時再對一次
+      new InteractButtonUI(document.getElementById('btn-interact'));
+    }
+  }
+
+  // 換到另一關(結算畫面的「下一關」):把現在的 Phaser 遊戲整個拆掉,照新的關卡重建一個。連線留著不動。
+  // 開房的人(或本機測試)呼叫 window.goToLevel(level);連線時它會先把關卡跟佈局傳給對方,對方收到後也走這裡重建。
+  let rebuilding = false;
+  function rebuildGame(level, layout) {
+    if (!gameStarted || rebuilding) return;
+    rebuilding = true;
+    window.SELECTED_LEVEL = clampLevel(level);
+    window.HOST_LAYOUT = layout || null;
+    rememberLevel(window.SELECTED_LEVEL);
+    document.getElementById('result-overlay').classList.add('hidden');
+    document.getElementById('pause-overlay').classList.add('hidden');
+    const old = window.game;
+    const next = () => {
+      rebuilding = false;
+      lastBox = ''; // 外框的大小要重新套一次,Phaser 才會照它縮放新的畫布
+      buildGame();
+    };
+    if (!old) {
+      next();
+      return;
+    }
+    old.sound.stopAll();
+    old.events.once(Phaser.Core.Events.DESTROY, () => setTimeout(next, 0));
+    old.destroy(true);
+  }
+  window.goToLevel = (level) => {
+    const target = clampLevel(level);
+    if (window.NET_ROLE === 'host' && !window.LOCAL_TEST_MODE) {
+      loadLevelLayout(target);
+      GameSync.sendLevel(target, JSON.parse(JSON.stringify(STATION_LAYOUT)));
+    }
+    rebuildGame(target, null);
+  };
+  GameSync.onLevelChange = (level, layout) => rebuildGame(level, layout);
+
+  function buildGame() {
 
     // Phaser 3.80 不會自動處理高解析度螢幕,所以把畫布的實際像素尺寸乘上裝置像素密度,
     // 場景那邊再用 camera zoom 把邏輯座標(還是 0-960 x 0-540)放大回來對應,
@@ -433,6 +502,7 @@ window.addEventListener('orientationchange', () => {
     const dpr = Math.min(window.devicePixelRatio || 1, MAX_RENDER_SCALE);
     window.RENDER_SCALE = dpr;
     markGameRunning();
+    const audioContext = getAudioContext();
     window.game = new Phaser.Game({
       type: Phaser.AUTO,
       parent: 'game-canvas-container',
@@ -443,19 +513,11 @@ window.addEventListener('orientationchange', () => {
         autoCenter: Phaser.Scale.CENTER_BOTH
       },
       backgroundColor: '#5c8f7a',
+      audio: audioContext ? { context: audioContext } : {},
       scene: [KitchenScene]
     });
 
     fitGameToScreen();
-    if (window.visualViewport) {
-      window.visualViewport.addEventListener('resize', fitGameToScreen);
-      window.visualViewport.addEventListener('scroll', fitGameToScreen);
-    }
-    window.addEventListener('resize', fitGameToScreen);
-    window.addEventListener('orientationchange', fitGameToScreen);
-    setInterval(fitGameToScreen, 500); // 手機轉向時瀏覽器回報的尺寸有時會慢半拍,定時再對一次
-
-    new InteractButtonUI(document.getElementById('btn-interact'));
   }
 
   showScreen('menu');

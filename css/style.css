@@ -597,6 +597,37 @@ h2 {
   max-width: 200px;
 }
 
+.result-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.result-buttons .btn {
+  flex: 0 1 180px;
+  padding: 12px 10px;
+}
+
+.result-buttons .btn.hidden {
+  display: none;
+}
+
+#result-overlay h2,
+#result-overlay p {
+  margin: 0;
+}
+
+/* 手機橫放畫面很矮:結算畫面的東西排緊一點才放得下。 */
+@media (max-height: 520px) {
+  #result-overlay {
+    gap: 8px;
+  }
+  #result-stars {
+    font-size: 32px;
+  }
+}
+
 /* 暫停選單蓋在結算畫面上面:遊戲結束後也可以按齒輪離開。 */
 #pause-overlay {
   position: absolute;
