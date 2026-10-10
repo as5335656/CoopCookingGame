@@ -174,7 +174,7 @@ h2 {
 
 /* 主選單的按鈕比其他畫面的小一號,背景圖才露得出來。 */
 #screen-menu .panel {
-  max-width: 250px;
+  max-width: 220px;
 }
 
 #screen-menu .btn {
@@ -232,33 +232,29 @@ h2 {
   min-width: 0;
 }
 
-/* 手機橫放時畫面很矮,主選單的按鈕一直排放不下:改成兩欄。 */
+/* 手機橫放時畫面很矮:按鈕還是排成正中間的一直欄(剛好在背景圖兩個角色的中間,不擋到臉),只是排緊一點才放得下。 */
 @media (orientation: landscape) and (max-height: 520px) {
   #screen-menu:not(.typing) {
-    flex-direction: row;
-    flex-wrap: wrap;
-    align-content: center;
-    padding: 12px 16px;
-    gap: 10px 16px;
-  }
-  #screen-menu:not(.typing) > h1,
-  #screen-menu:not(.typing) > #menu-error {
-    flex-basis: 100%;
-    margin: 0;
+    padding: 8px 16px;
+    gap: 7px;
   }
   #screen-menu:not(.typing) > h1 {
-    font-size: 22px;
+    font-size: 24px;
+    margin: 0 0 2px 0;
   }
   #screen-menu:not(.typing) > .panel {
-    width: 200px;
-    max-width: 30%;
+    max-width: 190px;
   }
   #screen-menu:not(.typing) .btn {
-    padding: 8px 10px;
+    padding: 7px 8px;
     font-size: 14px;
   }
   #screen-menu:not(.typing) .input-name {
-    padding: 6px;
+    padding: 5px;
+  }
+  #screen-menu:not(.typing) > #menu-error {
+    min-height: 0;
+    margin: 0;
   }
 }
 
