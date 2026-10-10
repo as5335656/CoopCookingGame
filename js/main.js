@@ -8,6 +8,35 @@ window.addEventListener('orientationchange', () => {
   setTimeout(() => window.scrollTo(0, 1), 50);
 });
 
+// 手機瀏覽器常常會拿舊的暫存頁面出來用,結果推了新版手機卻還是舊版。
+// 所以每次打開主選單都去問伺服器現在是第幾版(VERSION 檔,不走暫存);跟這一頁的版本不一樣,
+// 就換一個沒被暫存過的網址(加上 ?r=新版號)重新載入,瀏覽器就會去抓新的。
+// 只自動重載一次(記在這個分頁裡),避免伺服器跟暫存一直對不起來的時候無限重載。
+(function checkForNewVersion() {
+  const label = document.getElementById('version-label');
+  const mine = label ? label.textContent.trim() : '';
+  if (!mine || !window.fetch) return;
+  const search = location.search; // 先記下來:掃 QR code 進來的 ?room= 等一下會被拿掉,重載時要帶回去才會照樣加入房間
+  fetch('VERSION?t=' + Date.now(), { cache: 'no-store' })
+    .then((res) => (res.ok ? res.text() : ''))
+    .then((text) => {
+      const latest = text.trim();
+      if (!/^\d+\.\d+v$/.test(latest) || latest === mine || window.game) return;
+      let tried = null;
+      try {
+        tried = sessionStorage.getItem('coopReloadedFor');
+        sessionStorage.setItem('coopReloadedFor', latest);
+      } catch (e) {
+        return; // 記不了就不自動重載,免得停不下來
+      }
+      if (tried === latest) return;
+      const params = new URLSearchParams(search);
+      params.set('r', latest);
+      location.replace(location.pathname + '?' + params.toString());
+    })
+    .catch(() => {});
+})();
+
 (function () {
   const screens = {
     menu: document.getElementById('screen-menu'),
