@@ -153,6 +153,42 @@ h2 {
 
 /* 手機橫放時鍵盤會蓋掉大半個畫面:輸入房號的時候只留輸入框那一排,並貼在「鍵盤上方還看得到的區域」的最上面
    (位置跟高度由 main.js 照 visualViewport 設定),不然輸入框會被擠出畫面、點不到。 */
+/* 主選單的背景圖:鋪滿整個畫面(比例不合的地方裁掉,不變形),上面蓋一層半透明的深色,按鈕跟字才看得清楚。
+   圖是專案作者用 Gemini 生成的。 */
+#screen-menu {
+  background:
+    linear-gradient(rgba(30, 20, 12, 0.35), rgba(30, 20, 12, 0.55)),
+    url('../assets/sprites/menu_bg.jpg') center / cover no-repeat #2b2018;
+}
+
+#screen-menu h1 {
+  font-size: 34px;
+  color: #fff;
+  text-shadow: 0 2px 0 #5a2f12, 0 0 12px rgba(0, 0, 0, 0.75);
+}
+
+#screen-menu .btn,
+#screen-menu .input-code,
+#screen-menu .input-name {
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.45);
+}
+
+#screen-menu .input-code,
+#screen-menu .input-name {
+  background: rgba(58, 44, 32, 0.92);
+}
+
+#screen-menu #menu-error {
+  color: #ffd9d9;
+  text-shadow: 0 1px 4px #000;
+}
+
+#screen-menu #version-label {
+  opacity: 0.9;
+  color: #fff;
+  text-shadow: 0 1px 3px #000;
+}
+
 #screen-menu.typing {
   position: fixed;
   left: 0;
