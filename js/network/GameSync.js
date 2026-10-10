@@ -12,6 +12,7 @@ const GameSync = {
   onStateUpdate: null,
   onPauseRequest: null,
   onLevelChange: null,
+  onPeerLeft: null,
 
   init(peerConnection, role) {
     this.pc = peerConnection;
@@ -33,6 +34,9 @@ const GameSync = {
         break;
       case 'state':
         if (this.onStateUpdate) this.onStateUpdate(msg.state);
+        break;
+      case 'bye':
+        if (this.onPeerLeft) this.onPeerLeft();
         break;
       case 'level':
         if (this.onLevelChange) this.onLevelChange(msg.level, msg.layout);
@@ -56,6 +60,11 @@ const GameSync = {
   // Host 換關卡(結算畫面按「下一關」):把新的關卡跟佈局告訴 Joiner,兩邊各自重建遊戲畫面,連線不用斷。
   sendLevel(level, layout) {
     this.pc.send({ type: 'level', level, layout });
+  },
+
+  // 自己要離開遊戲了(按「離開遊戲 / 回主畫面」):先跟對方說一聲,對方才會馬上跟著回主選單,不用等連線自己斷。
+  sendBye() {
+    if (this.pc) this.pc.send({ type: 'bye' });
   },
 
   sendState(state) {

@@ -344,7 +344,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.76';
+    const v = '?v=1.77';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -499,7 +499,7 @@ class KitchenScene extends Phaser.Scene {
     const playAgainBtn = document.getElementById('btn-play-again');
     const nextBtn = document.getElementById('btn-next-level');
     const waitEl = document.getElementById('result-wait');
-    document.getElementById('btn-result-menu').onclick = () => location.reload(); // 重新載入 = 回主選單,連線也一起斷開
+    document.getElementById('btn-result-menu').onclick = () => window.leaveToMenu(); // 回主選單,對方也會跟著回去
     playAgainBtn.classList.toggle('hidden', !this.isHost);
     nextBtn.classList.toggle('hidden', !this.isHost || this.level >= LEVEL_COUNT);
     waitEl.textContent = this.isHost ? '' : '等待開房的人選擇「下一關」或「再玩一次」...';
@@ -613,7 +613,7 @@ class KitchenScene extends Phaser.Scene {
     pauseBtn.onclick = () => this.setPaused(true);
     document.getElementById('btn-resume').onclick = () => this.setPaused(false);
     // 離開遊戲 = 回到主選單(重新載入頁面,連線也會一起斷開)。
-    document.getElementById('btn-quit').onclick = () => location.reload();
+    document.getElementById('btn-quit').onclick = () => window.leaveToMenu();
 
     // 背景音樂:進遊戲就開始播(編輯模式不播),可以在這個選單裡換歌或關掉。
     const volumeSlider = document.getElementById('bgm-volume');

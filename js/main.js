@@ -279,6 +279,7 @@ window.addEventListener('orientationchange', () => {
     };
     pc.onClose = () => {
       pairingStatus.textContent = '連線已中斷';
+      peerLeft();
     };
   }
 
@@ -346,6 +347,8 @@ window.addEventListener('orientationchange', () => {
     }
   }
   window.addEventListener('pagehide', () => {
+    // 直接關掉分頁或重新整理也算離開:盡量跟對方道別(送不出去的話,對方要等連線自己斷才會知道)。
+    if (gameStarted && !leaving && !window.LOCAL_TEST_MODE) GameSync.sendBye();
     try {
       localStorage.removeItem(RUNNING_KEY);
     } catch (e) {
@@ -434,6 +437,47 @@ window.addEventListener('orientationchange', () => {
       }
     }
     return sharedAudioContext;
+  }
+
+  // 遊戲中有一方離開,另一方也直接結束、回主選單(一個人留在場上也玩不了)。
+  // 回主選單一律用重新載入頁面;要顯示在主選單上的那句話先存起來,載入後再拿出來顯示。
+  const NOTICE_KEY = 'coopMenuNotice';
+  let leaving = false;
+  function reloadToMenu(notice) {
+    if (leaving) return;
+    leaving = true;
+    try {
+      if (notice) sessionStorage.setItem(NOTICE_KEY, notice);
+    } catch (e) {
+      // 存不了就只是沒有那句話
+    }
+    location.reload();
+  }
+  // 對方離開了(收到對方的道別,或連線斷了)。還沒進遊戲的話不處理,配對畫面上已經有顯示連線狀態。
+  function peerLeft() {
+    if (!gameStarted || window.LOCAL_TEST_MODE) return;
+    reloadToMenu('對方已離開遊戲,連線已中斷。');
+  }
+  GameSync.onPeerLeft = peerLeft;
+  // 自己離開(暫停選單的「離開遊戲」、結算畫面的「回主畫面」):先跟對方道別再回主選單。
+  window.leaveToMenu = () => {
+    if (leaving) return;
+    if (gameStarted && !window.LOCAL_TEST_MODE) {
+      GameSync.sendBye();
+      leaving = true;
+      setTimeout(() => location.reload(), 200); // 等道別送出去
+      return;
+    }
+    reloadToMenu(null);
+  };
+  try {
+    const notice = sessionStorage.getItem(NOTICE_KEY);
+    if (notice) {
+      sessionStorage.removeItem(NOTICE_KEY);
+      menuError.textContent = notice;
+    }
+  } catch (e) {
+    // 忽略
   }
 
   let gameStarted = false;
