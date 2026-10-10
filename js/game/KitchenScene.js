@@ -344,7 +344,7 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.77';
+    const v = '?v=1.78';
     this.load.image('table_wood', 'assets/sprites/table.png' + v);
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
@@ -456,7 +456,6 @@ class KitchenScene extends Phaser.Scene {
       this.testMovePaths = { host: null, joiner: null };
       this.testMovePathIndex = { host: 0, joiner: 0 };
       this.testPendingInteract = { host: null, joiner: null };
-      document.getElementById('btn-interact').style.display = 'none';
     }
 
     if (this.editMode) {
@@ -964,7 +963,6 @@ class KitchenScene extends Phaser.Scene {
     } else {
       if (!paused) {
         this.updateLocalMovement(delta);
-        this.handleInteractInput();
       }
       this.updateRemoteMovement(delta);
     }
@@ -1372,7 +1370,6 @@ class KitchenScene extends Phaser.Scene {
   // 用單一控制項一次調整「所有物件」的大小、新增物件,結果即時整理成可複製的佈局文字。
   // 進編輯模式時遊戲模擬(訂單/顧客/計時)是暫停的,場景裡不會有顧客。
   enableEditMode() {
-    document.getElementById('btn-interact').style.display = 'none';
 
     this.editedLayout = {}; // { [id]: {x, y} },記錄被拖過的最終位置
     this.dynamicDefs = {}; // { [id]: def },記錄編輯模式下新增/被改種類的物件完整定義(優先於 STATION_LAYOUT)
@@ -1857,20 +1854,6 @@ class KitchenScene extends Phaser.Scene {
     }
   }
 
-  handleInteractInput() {
-    if (!GameInput.interactJustPressed) return;
-    GameInput.interactJustPressed = false;
-
-    const nearestId = this.findNearestStation(this.localPos.x, this.localPos.y);
-    if (!nearestId) return;
-
-    if (this.isHost) {
-      interactStation(this.state, nearestId, 'host');
-    } else {
-      GameSync.sendInteract(nearestId);
-    }
-  }
-
   // 玩家站在 (x,y) 時,離「碰得到這個站點」還差多遠;0 代表已經碰得到。
   // 用兩個方塊之間的間距算(取 x/y 兩軸較大的那個),所以正對面跟斜對角都一樣算碰得到,
   // 站點放大縮小也會自動跟著調整,不會因為站點比較大就碰不到。
@@ -1878,21 +1861,6 @@ class KitchenScene extends Phaser.Scene {
     const { hw, hh } = stationHalf(def);
     const pad = PLAYER_BODY / 2 + INTERACT_REACH;
     return Math.max(0, Math.abs(x - def.x) - hw - pad, Math.abs(y - def.y) - hh - pad);
-  }
-
-  findNearestStation(x, y) {
-    let best = null;
-    let bestDist = Infinity;
-    for (const id in STATION_LAYOUT) {
-      const def = STATION_LAYOUT[id];
-      if (this.reachGap(def, x, y) > 0) continue;
-      const d = Phaser.Math.Distance.Between(x, y, def.x, def.y);
-      if (d < bestDist) {
-        bestDist = d;
-        best = id;
-      }
-    }
-    return best;
   }
 
   // 點擊/點選專用:限定要真的點在該物件自己的方塊範圍內(留一點點容錯)才算點到它,

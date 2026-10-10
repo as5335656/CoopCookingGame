@@ -497,7 +497,6 @@ window.addEventListener('orientationchange', () => {
       window.addEventListener('resize', fitGameToScreen);
       window.addEventListener('orientationchange', fitGameToScreen);
       setInterval(fitGameToScreen, 500); // 手機轉向時瀏覽器回報的尺寸有時會慢半拍,定時再對一次
-      new InteractButtonUI(document.getElementById('btn-interact'));
     }
   }
 

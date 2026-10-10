@@ -334,8 +334,7 @@ h2 {
 @media (orientation: portrait) {
   #screen-game.active #game-canvas-container,
   #screen-game.active #hud-overlay,
-  #screen-game.active #pause-overlay,
-  #screen-game.active #btn-interact {
+  #screen-game.active #pause-overlay {
     display: none;
   }
   #screen-game.active #rotate-prompt {
@@ -556,25 +555,6 @@ h2 {
 
 #btn-pause:active {
   filter: brightness(0.85);
-}
-
-#btn-interact {
-  position: absolute;
-  right: 24px;
-  bottom: env(safe-area-inset-bottom, 30px);
-  width: 84px;
-  height: 84px;
-  border-radius: 50%;
-  border: none;
-  background: rgba(232, 128, 74, 0.9);
-  color: #fff;
-  font-size: 16px;
-  font-weight: 700;
-  z-index: 10;
-}
-
-#btn-interact.pressed {
-  background: rgba(200, 100, 50, 1);
 }
 
 #result-overlay {
