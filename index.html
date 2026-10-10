@@ -4,7 +4,7 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
 <title>雙人合作餐廳</title>
-<link rel="stylesheet" href="css/style.css?v=1.83" />
+<link rel="stylesheet" href="css/style.css?v=1.84" />
 </head>
 <body>
 
@@ -32,7 +32,7 @@
   </div>
 
   <p id="menu-error" class="error-text typing-keep"></p>
-  <div id="version-label">1.83v</div>
+  <div id="version-label">1.84v</div>
 </div>
 
 <div id="screen-levels" class="screen">
@@ -109,8 +109,11 @@
 
   <div id="pause-overlay" class="hidden">
     <h2>遊戲暫停</h2>
-    <button id="btn-resume" class="btn btn-primary">繼續遊戲</button>
-    <button id="btn-quit" class="btn btn-secondary">離開遊戲</button>
+    <div class="result-buttons">
+      <button id="btn-resume" class="btn btn-primary">繼續遊戲</button>
+      <button id="btn-restart" class="btn btn-secondary">重新開始</button>
+      <button id="btn-quit" class="btn btn-secondary">離開遊戲</button>
+    </div>
     <div class="bgm-row">
       <span>音樂:<span id="bgm-name"></span></span>
       <button id="btn-bgm-next" class="btn btn-secondary">換一首</button>
@@ -167,17 +170,17 @@
 <script src="vendor/phaser.min.js"></script>
 <script src="vendor/peerjs.min.js"></script>
 <script src="vendor/qrcode.min.js"></script>
-<script src="js/webrtc/PeerConnection.js?v=1.83"></script>
-<script src="js/webrtc/LanLobby.js?v=1.83"></script>
-<script src="js/game/RecipeData.js?v=1.83"></script>
-<script src="js/game/Progress.js?v=1.83"></script>
-<script src="js/game/GameState.js?v=1.83"></script>
-<script src="js/game/Station.js?v=1.83"></script>
-<script src="js/game/OrderManager.js?v=1.83"></script>
-<script src="js/game/KitchenScene.js?v=1.83"></script>
-<script src="js/network/GameSync.js?v=1.83"></script>
-<script src="js/ui/HUD.js?v=1.83"></script>
-<script src="js/ui/Bgm.js?v=1.83"></script>
-<script src="js/main.js?v=1.83"></script>
+<script src="js/webrtc/PeerConnection.js?v=1.84"></script>
+<script src="js/webrtc/LanLobby.js?v=1.84"></script>
+<script src="js/game/RecipeData.js?v=1.84"></script>
+<script src="js/game/Progress.js?v=1.84"></script>
+<script src="js/game/GameState.js?v=1.84"></script>
+<script src="js/game/Station.js?v=1.84"></script>
+<script src="js/game/OrderManager.js?v=1.84"></script>
+<script src="js/game/KitchenScene.js?v=1.84"></script>
+<script src="js/network/GameSync.js?v=1.84"></script>
+<script src="js/ui/HUD.js?v=1.84"></script>
+<script src="js/ui/Bgm.js?v=1.84"></script>
+<script src="js/main.js?v=1.84"></script>
 </body>
 </html>

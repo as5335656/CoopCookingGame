@@ -154,8 +154,8 @@ function layoutCoversLevel(layout, needs) {
 // 平底鍋:生食 -> 煮熟,煮好放太久 -> 燒焦。哪個生食對應哪組時間/成品,查這裡。
 const COOK_RECIPES = {
   // cookTimeMs:煎多久會熟;burnAfterMs:煎好之後再放多久會燒焦。
-  beef_raw: { cookedItem: 'beef_cooked', burntItem: 'beef_burnt', cookTimeMs: 6000, burnAfterMs: 10000 },
-  chicken_raw: { cookedItem: 'chicken_cooked', burntItem: 'chicken_burnt', cookTimeMs: 6000, burnAfterMs: 10000 }
+  beef_raw: { cookedItem: 'beef_cooked', burntItem: 'beef_burnt', cookTimeMs: 6000, burnAfterMs: 11500 },
+  chicken_raw: { cookedItem: 'chicken_cooked', burntItem: 'chicken_burnt', cookTimeMs: 6000, burnAfterMs: 11500 }
 };
 
 // 鉆板:切生食材。目前只有番茄需要切。

@@ -12,6 +12,7 @@ const GameSync = {
   onStateUpdate: null,
   onPauseRequest: null,
   onLevelChange: null,
+  onRestartRequest: null,
   onPeerLeft: null,
 
   init(peerConnection, role) {
@@ -34,6 +35,9 @@ const GameSync = {
         break;
       case 'state':
         if (this.onStateUpdate) this.onStateUpdate(msg.state);
+        break;
+      case 'restart':
+        if (this.onRestartRequest) this.onRestartRequest();
         break;
       case 'bye':
         if (this.onPeerLeft) this.onPeerLeft();
@@ -65,6 +69,11 @@ const GameSync = {
   // 自己要離開遊戲了(按「離開遊戲 / 回主畫面」):先跟對方說一聲,對方才會馬上跟著回主選單,不用等連線自己斷。
   sendBye() {
     if (this.pc) this.pc.send({ type: 'bye' });
+  },
+
+  // Joiner 在暫停選單按「重新開始」:請 Host 把這一關重來。
+  sendRestart() {
+    this.pc.send({ type: 'restart' });
   },
 
   sendState(state) {

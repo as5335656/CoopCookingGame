@@ -691,6 +691,10 @@ h2 {
   text-align: right;
 }
 
+#pause-overlay .result-buttons {
+  max-width: 560px;
+}
+
 #pause-overlay .bgm-row .btn {
   width: auto;
   padding: 8px 12px;

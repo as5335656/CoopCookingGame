@@ -31,6 +31,8 @@ const CUSTOMER_DEPTH = 5; // 客人:會從門口走到座位,畫在站點跟角�
 // (站點預設邊長 64 的 0.8 倍),這樣從取盤站拿起來、放到檯面上、再拿起來,大小都不會變。
 const PLATE_DISPLAY_SIZE = 52;
 const CUP_TO_PLATE_RATIO = (64 * 0.6) / 52; // 杯子的大小相對於盤子:換算出來剛好等於杯架上圖示的大小(64 的檯面 x 0.6)
+const STATION_BORDER_IDLE = 0xf5ead9; // 站點外框「沒事」時的顏色代號(實際上不畫出來)
+const PLATE_FOOD_BASE = 0.1; // 盤子上的東西,底部落在盤子中心往下「盤子大小 x 這個比例」的地方
 const ITEM_ON_TABLE_RATIO = 0.6; // 食材放在檯面上(包含材料箱上的圖示)的大小,相對於檯面邊長
 const DIRTY_PLATE_TINT = 0xa58f6f; // 髒盤:盤子圖染成這個顏色
 // 客人、客人頭上「要什麼」的泡泡:放大一點才看得清楚(手機螢幕小,太小的圖會糊成一團)。
@@ -172,7 +174,7 @@ function buildLevelLayout(level) {
   const bottomLength = Math.max(runs.bottom, hasSink ? 2 : 0);
   for (let i = 1; i <= bottomLength; i++) {
     if (hasSink && i === 1) put('sink', { x: SPARE_SLOTS.B1.x, y: SPARE_SLOTS.B1.y, type: 'sink', img: 'equip_sink', fullArt: true, label: '水槽', cleanTo: 'counter_clean' });
-    else if (hasSink && i === 2) counter('B2', 'counter_clean');
+    else if (hasSink && i === 2) put('counter_clean', { x: SPARE_SLOTS.B2.x, y: SPARE_SLOTS.B2.y, type: 'counter', label: '桌子', dishRack: true });
     else counter('B' + i);
   }
 
@@ -237,6 +239,18 @@ const LEGACY_LAYOUT_STORAGE_PREFIX = 'coopCookingLayout_level_';
 function applyLayoutData(layoutData) {
   for (const key in STATION_LAYOUT) delete STATION_LAYOUT[key];
   Object.assign(STATION_LAYOUT, normalizeLayout(layoutData));
+}
+
+// 這張桌子是不是「水槽洗好的盤子放的地方」:佈局裡有標記(dishRack),或是有某個水槽的 cleanTo 指著它
+// (自己排的舊佈局沒有標記,用這個認)。
+function isDishRack(def) {
+  if (!def || def.type !== 'counter') return false;
+  if (def.dishRack) return true;
+  for (const id in STATION_LAYOUT) {
+    const other = STATION_LAYOUT[id];
+    if (other.type === 'sink' && other.cleanTo && STATION_LAYOUT[other.cleanTo] === def) return true;
+  }
+  return false;
 }
 
 function loadLevelLayout(levelNum) {
@@ -344,8 +358,9 @@ class KitchenScene extends Phaser.Scene {
 
   preload() {
     // 圖檔網址加版本號,確保每次上新版時手機瀏覽器會抓最新的圖,不會卡在舊的快取版本。
-    const v = '?v=1.83';
-    this.load.image('table_wood', 'assets/sprites/table.png' + v);
+    const v = '?v=1.84';
+    this.load.image('table_wood', 'assets/sprites/counter.png' + v); // 所有檯面/桌子的底圖
+    this.load.image('dish_rack', 'assets/sprites/dish_rack.png' + v); // 水槽旁邊放洗好盤子的平台
     this.load.image('table_chair', 'assets/sprites/table_chair.png' + v);
     this.load.image('kitchen_bg', 'assets/sprites/background.png' + v);
     this.load.image('p1_left', 'assets/sprites/p1_left.png' + v);
@@ -503,9 +518,7 @@ class KitchenScene extends Phaser.Scene {
     nextBtn.classList.toggle('hidden', !this.isHost || this.level >= LEVEL_COUNT);
     waitEl.textContent = this.isHost ? '' : '等待開房的人選擇「下一關」或「再玩一次」...';
     if (this.isHost) {
-      playAgainBtn.onclick = () => {
-        this.state = createInitialState(this.level);
-      };
+      playAgainBtn.onclick = () => this.restartLevel();
       nextBtn.onclick = () => {
         if (!this.canGoNextLevel()) return;
         window.goToLevel(this.level + 1);
@@ -518,6 +531,11 @@ class KitchenScene extends Phaser.Scene {
       nextBtn.textContent = ok ? '下一關(1-' + (this.level + 1) + ')' : '下一關(要先拿到 1 星)';
     };
     this.refreshNextLevelButton();
+  }
+
+  // 這一關從頭來(只有 Host 會呼叫):換一份全新的狀態,暫停也一起解除。
+  restartLevel() {
+    this.state = createInitialState(this.level);
   }
 
   // 可不可以進下一關:跟選關畫面同一條規則(這一關至少 1 星);本機測試不受限制。
@@ -613,6 +631,12 @@ class KitchenScene extends Phaser.Scene {
     document.getElementById('btn-resume').onclick = () => this.setPaused(false);
     // 離開遊戲 = 回到主選單(重新載入頁面,連線也會一起斷開)。
     document.getElementById('btn-quit').onclick = () => window.leaveToMenu();
+    // 重新開始:這一關從頭來(時間、收入、客人、盤子全部重置)。Host 直接重置;Joiner 請 Host 重置,新的狀態會同步回來。
+    document.getElementById('btn-restart').onclick = () => {
+      if (this.isHost) this.restartLevel();
+      else GameSync.sendRestart();
+    };
+    if (this.isHost && !this.localTestMode) GameSync.onRestartRequest = () => this.restartLevel();
 
     // 背景音樂:進遊戲就開始播(編輯模式不播),可以在這個選單裡換歌或關掉。
     const volumeSlider = document.getElementById('bgm-volume');
@@ -710,8 +734,10 @@ class KitchenScene extends Phaser.Scene {
     const fullArtKey = def.type === 'trash' ? 'equip_trash' : (def.fullArt ? def.img : null);
     const ownArtKey = def.img && !fullArtKey ? def.img : null;
     const iconImgKey = !ownArtKey && def.itemType ? itemImageKey(def.itemType) : null;
-    const bg = this.add.image(0, 0, fullArtKey || 'table_wood').setDisplaySize(size, height);
-    const outline = this.add.rectangle(0, 0, size, height, 0x000000, 0).setStrokeStyle(3, 0xf5ead9);
+    // 水槽旁邊那張「洗好的盤子自動放這裡」的桌子用專屬的平台圖,一眼看得出來它跟水槽是一組的。
+    const bg = this.add.image(0, 0, fullArtKey || (isDishRack(def) ? 'dish_rack' : 'table_wood')).setDisplaySize(size, height);
+    // 桌面圖本身就有黑色外框,不用再描一圈邊(描了會變成雙層框)。outline 留著是因為編輯模式選取時會改它的顏色。
+    const outline = this.add.rectangle(0, 0, size, height, 0x000000, 0).setStrokeStyle(3, 0xf5ead9, 0);
 
     // 廚具本身的東西(拿著/煮著/切著的食材)要疊在「鍋面/檯面」中心,不是飄在廚具圖上方——
     // 平底鍋圖右側有一截握把,實際鍋面中心比整張圖的正中央略偏左,所以額外往左修正一點。
@@ -1629,7 +1655,7 @@ class KitchenScene extends Phaser.Scene {
     if (newDef.type === 'sink') {
       const spot = this.findFreeSpotBeside(id, pos, size);
       if (spot) {
-        const tableId = this.addStation(STATION_TYPE_PALETTE.find((t) => t.type === 'counter'), spot);
+        const tableId = this.addStation(Object.assign({ dishRack: true }, STATION_TYPE_PALETTE.find((t) => t.type === 'counter')), spot);
         this.sizes[tableId] = size;
         this.applyStationSize(tableId, size);
         newDef.cleanTo = tableId;
@@ -1967,7 +1993,11 @@ class KitchenScene extends Phaser.Scene {
       }
       const fit = this.fitDisplaySize(keys[i], itemSize);
       const offsetX = (i - (keys.length - 1) / 2) * spacing;
-      overlay.setTexture(keys[i]).setDisplaySize(fit.w, fit.h).setPosition(plateImage.x + offsetX, plateImage.y - plateSize * 0.1).setVisible(true);
+      // 盤子上的東西要「放在盤子上面」:東西的底部落在盤面中間偏下一點,整個往上長,盤子露在最下面。
+      // (以前是把東西的正中心對著盤子,比較高的東西像漢堡,看起來就變成盤子橫在漢堡中間。)
+      // 杯子裡還沒泡好的材料維持原本的位置(畫在杯口附近)。
+      const y = isCup ? plateImage.y - plateSize * 0.1 : plateImage.y + plateSize * PLATE_FOOD_BASE - fit.h / 2;
+      overlay.setTexture(keys[i]).setDisplaySize(fit.w, fit.h).setPosition(plateImage.x + offsetX, y).setVisible(true);
     });
     return keys.length > 0;
   }
@@ -2006,7 +2036,8 @@ class KitchenScene extends Phaser.Scene {
 
   setStationBorder(view, color, width) {
     if (view.outline && typeof view.outline.setStrokeStyle === 'function') {
-      view.outline.setStrokeStyle(width || 3, color);
+      // 平常(STATION_BORDER_IDLE)不畫框:桌面圖自己就有黑框。只有要提示狀態(煮好了、快焦了...)的時候才畫上有顏色的框。
+      view.outline.setStrokeStyle(width || 3, color, color === STATION_BORDER_IDLE ? 0 : 1);
     }
   }
 
